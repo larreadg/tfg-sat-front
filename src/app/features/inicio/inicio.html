@@ -1,0 +1,89 @@
+<div class="flex flex-column gap-4">
+  <div class="flex flex-column gap-2">
+    <h1 class="text-2xl font-semibold m-0">Bienvenido</h1>
+    <p class="text-color-secondary m-0" style="max-width: 65ch">
+      Desde este panel podés revisar los reportes ciudadanos de agua potable recibidos por WhatsApp, dar
+      seguimiento a las encuestas enviadas y consultar los resultados del análisis cualitativo asistido por IA.
+    </p>
+  </div>
+
+  <a routerLink="/reportes" class="no-underline text-color">
+    <p-card styleClass="inicio-tile">
+      <div class="flex align-items-center gap-3">
+        <div
+          class="flex-shrink-0 flex align-items-center justify-content-center border-round-xl surface-100"
+          style="width: 3rem; height: 3rem"
+        >
+          <i class="pi pi-file text-primary text-xl"></i>
+        </div>
+        <div class="flex-1 flex flex-column gap-1">
+          <span class="text-lg font-semibold">Reportes</span>
+          <span class="text-color-secondary">
+            Revisá los reportes ciudadanos recibidos y su estado de clasificación.
+          </span>
+        </div>
+        <i class="pi pi-arrow-right text-color-secondary flex-shrink-0"></i>
+      </div>
+    </p-card>
+  </a>
+
+  <div class="grid">
+    <div class="col-12 md:col-6">
+      <a routerLink="/encuestas" class="no-underline text-color">
+        <p-card styleClass="inicio-tile h-full">
+          <div class="flex flex-column gap-3">
+            <div class="flex align-items-center justify-content-between">
+              <div
+                class="flex align-items-center justify-content-center border-round-xl surface-100"
+                style="width: 3rem; height: 3rem"
+              >
+                <i class="pi pi-list-check text-primary text-xl"></i>
+              </div>
+              <i class="pi pi-arrow-right text-color-secondary"></i>
+            </div>
+            <div class="flex flex-column gap-1">
+              <span class="text-lg font-semibold">Encuestas</span>
+              <span class="text-color-secondary">
+                Consultá las encuestas enviadas a la ciudadanía y su nivel de respuesta.
+              </span>
+            </div>
+          </div>
+        </p-card>
+      </a>
+    </div>
+
+    <div class="col-12 md:col-6">
+      <a routerLink="/analisis" class="no-underline text-color">
+        <p-card styleClass="inicio-tile h-full">
+          <div class="flex flex-column gap-3">
+            <div class="flex align-items-center justify-content-between">
+              <div
+                class="flex align-items-center justify-content-center border-round-xl surface-100"
+                style="width: 3rem; height: 3rem"
+              >
+                <i class="pi pi-chart-bar text-primary text-xl"></i>
+              </div>
+              <i class="pi pi-arrow-right text-color-secondary"></i>
+            </div>
+            <div class="flex flex-column gap-1">
+              <span class="text-lg font-semibold">Análisis</span>
+              <span class="text-color-secondary">
+                Consultá la clasificación de contaminación resultante del análisis con IA.
+              </span>
+            </div>
+          </div>
+        </p-card>
+      </a>
+    </div>
+  </div>
+
+  <a routerLink="/configuracion" class="no-underline text-color">
+    <p-card styleClass="inicio-tile">
+      <div class="flex align-items-center gap-3">
+        <i class="pi pi-cog text-color-secondary"></i>
+        <span class="flex-1 font-medium">Configuración del sistema</span>
+        <i class="pi pi-arrow-right text-color-secondary"></i>
+      </div>
+    </p-card>
+  </a>
+</div>

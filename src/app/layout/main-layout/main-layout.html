@@ -1,0 +1,49 @@
+<div class="min-h-screen flex flex-column">
+  <header
+    class="flex align-items-center justify-content-between px-3 surface-card border-bottom-1 surface-border flex-shrink-0"
+    style="height: 4rem"
+  >
+    <div class="flex align-items-center gap-2">
+      <p-button
+        icon="pi pi-bars"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        styleClass="md:hidden"
+        ariaLabel="Abrir menú"
+        (onClick)="toggleSidebar()"
+      />
+      <div class="flex align-items-center justify-content-center border-round-lg surface-100 w-2rem h-2rem">
+        <i class="pi pi-shield text-primary"></i>
+      </div>
+      <span class="font-semibold">Sistema de Análisis de Agua</span>
+    </div>
+
+    <div class="flex align-items-center">
+      <p-avatar
+        icon="pi pi-user"
+        shape="circle"
+        styleClass="cursor-pointer"
+        ariaLabel="Menú de usuario"
+        (click)="userMenu.toggle($event)"
+      />
+      <p-menu #userMenu [model]="userMenuItems" [popup]="true" />
+    </div>
+  </header>
+
+  <div class="flex flex-1">
+    <aside class="hidden md:block surface-card border-right-1 surface-border flex-shrink-0" style="width: 16rem">
+      <p-menu [model]="navItems" styleClass="border-none w-full" />
+    </aside>
+
+    <p-drawer [(visible)]="sidebarVisible" position="left" [modal]="true" header="Menú">
+      <div (click)="closeSidebar()">
+        <p-menu [model]="navItems" styleClass="border-none w-full" />
+      </div>
+    </p-drawer>
+
+    <main class="flex-1 p-4 overflow-auto surface-ground">
+      <router-outlet />
+    </main>
+  </div>
+</div>

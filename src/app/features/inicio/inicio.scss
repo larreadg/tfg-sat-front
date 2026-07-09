@@ -1,0 +1,24 @@
+// PrimeFlex no expone utilidades de hover/transform: SCSS justificado para dar
+// retroalimentación de estado (elevación) en los accesos rápidos de inicio.
+
+.inicio-tile {
+  transition:
+    box-shadow 180ms ease-out,
+    transform 180ms ease-out;
+
+  &:hover,
+  &:focus-within {
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 1px var(--p-primary-300);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inicio-tile {
+    transition: none;
+
+    &:hover {
+      transform: none;
+    }
+  }
+}

@@ -1,0 +1,145 @@
+<div class="min-h-screen flex">
+  <section
+    class="hidden lg:flex lg:w-6 xl:w-5 login-hero relative flex-column justify-content-between p-6"
+  >
+    <div class="login-hero__blob login-hero__blob--top" aria-hidden="true"></div>
+    <div class="login-hero__blob login-hero__blob--bottom" aria-hidden="true"></div>
+
+    <div></div>
+
+    <div class="relative z-1 flex flex-column align-items-center text-center gap-4 mx-auto" style="max-width: 24rem">
+      <img src="logo2.webp" [alt]="appName" style="width: 8rem; height: auto" />
+      <p class="text-white opacity-90 m-0">
+        Monitoreo y clasificación de reportes ciudadanos sobre calidad del agua potable.
+      </p>
+    </div>
+
+    <p class="relative z-1 text-white opacity-70 text-sm m-0">Panel de administración · uso interno</p>
+  </section>
+
+  <section class="flex-1 flex align-items-center justify-content-center surface-ground p-6">
+    <div class="grid w-full">
+      <div class="col-12 lg:col-8 lg:col-offset-2 xl:col-6 xl:col-offset-3">
+        <div class="flex lg:hidden align-items-center justify-content-center mb-5">
+          <img src="logo.png" [alt]="appName" style="width: 6rem; height: auto" />
+        </div>
+
+        <p-card styleClass="shadow-2" [style]="{ '--p-card-body-padding': '2.5rem' }">
+          <div class="flex flex-column align-items-center gap-2 text-center mb-4">
+            <img src="logo3.webp" [alt]="appName" style="width: 2.75rem; height: auto" />
+            <h2 class="text-2xl font-semibold m-0">{{ cardTitle() }}</h2>
+            <p class="text-color-secondary m-0">{{ cardSubtitle() }}</p>
+          </div>
+
+          @if (stage() === 'credentials') {
+            <form [formGroup]="credentialsForm" (ngSubmit)="submitCredentials()" class="grid">
+              <div class="col-12 flex flex-column gap-2">
+                <label for="correoElectronico">Correo electrónico</label>
+                <input
+                  pInputText
+                  pSize="small"
+                  id="correoElectronico"
+                  type="email"
+                  formControlName="correoElectronico"
+                  placeholder="usuario@dominio.com"
+                  [invalid]="isFieldInvalid(credentialsForm, 'correoElectronico')"
+                  autocomplete="email"
+                  [fluid]="true"
+                />
+                @if (isFieldInvalid(credentialsForm, 'correoElectronico')) {
+                  <p-message severity="error" size="small" variant="simple">Ingresa un correo electrónico válido.</p-message>
+                }
+              </div>
+
+              <div class="col-12 flex flex-column gap-2">
+                <label for="contrasena">Contraseña</label>
+                <p-password
+                  inputId="contrasena"
+                  formControlName="contrasena"
+                  size="small"
+                  [feedback]="false"
+                  [toggleMask]="true"
+                  [fluid]="true"
+                  [invalid]="isFieldInvalid(credentialsForm, 'contrasena')"
+                  autocomplete="current-password"
+                />
+                @if (isFieldInvalid(credentialsForm, 'contrasena')) {
+                  <p-message severity="error" size="small" variant="simple">La contraseña es obligatoria.</p-message>
+                }
+              </div>
+
+              <div class="col-12 flex flex-column gap-2">
+                <div class="flex align-items-center gap-2">
+                  <div class="captcha-box flex-shrink-0 border-round surface-100" [innerHTML]="captchaSvg()"></div>
+                  <input
+                    pInputText
+                    pSize="small"
+                    formControlName="captcha"
+                    placeholder="Texto de la imagen"
+                    [invalid]="isFieldInvalid(credentialsForm, 'captcha')"
+                    class="flex-1 min-w-0"
+                  />
+                  <p-button
+                    type="button"
+                    icon="pi pi-refresh"
+                    size="small"
+                    [text]="true"
+                    [rounded]="true"
+                    severity="secondary"
+                    ariaLabel="Refrescar captcha"
+                    (onClick)="loadCaptcha()"
+                  />
+                </div>
+                @if (isFieldInvalid(credentialsForm, 'captcha')) {
+                  <p-message severity="error" size="small" variant="simple">El captcha es obligatorio.</p-message>
+                }
+              </div>
+
+              <div class="col-12 flex justify-content-center">
+                <p-button icon="pi pi-sign-in" [rounded]="true" label="Ingresar" type="submit" [loading]="loading()" />
+              </div>
+            </form>
+          } @else {
+            <form [formGroup]="otpForm" (ngSubmit)="submitOtp()" class="grid">
+              <div class="col-12 flex flex-column align-items-center gap-2">
+                <p-inputotp
+                  formControlName="codigo"
+                  [length]="6"
+                  [integerOnly]="true"
+                  [invalid]="isFieldInvalid(otpForm, 'codigo')"
+                />
+                @if (isFieldInvalid(otpForm, 'codigo')) {
+                  <p-message severity="error" size="small" variant="simple">Ingresa el código de 6 dígitos.</p-message>
+                }
+              </div>
+
+              <div class="col-12 flex justify-content-center">
+                <p-button label="Verificar" type="submit" [loading]="loading()" [rounded]="true" />
+              </div>
+
+              <div class="col-12 flex align-items-center justify-content-between">
+                <p-button
+                  type="button"
+                  [label]="resendLabel()"
+                  [text]="true"
+                  [rounded]="true"
+                  [disabled]="resendCooldown() > 0"
+                  (onClick)="resendCode()"
+                />
+                <p-button
+                  type="button"
+                  label="Volver al inicio de sesión"
+                  [link]="true"
+                  [rounded]="true"
+                  (onClick)="backToLogin()"
+                />
+              </div>
+            </form>
+          }
+        </p-card>
+
+        <p class="text-center text-color-secondary text-sm mt-4">{{ currentYear }} · {{ appName }}</p>
+      </div>
+    </div>
+  </section>
+</div>
