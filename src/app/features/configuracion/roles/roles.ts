@@ -13,6 +13,7 @@ import { ApiResponse } from '../../../core/models/api-response.model';
 import { PermisoItem, ROL_ADMIN, RolItem } from '../../../core/models/rol.model';
 import { permiso, RECURSO } from '../../../core/models/permiso.model';
 import { RolForm } from './rol-form/rol-form';
+import { escaparHtml } from '../../../shared/escapar-html';
 
 /**
  * ABM de roles. El catálogo de roles es chico, así que se lista completo (el
@@ -104,7 +105,7 @@ export class Roles {
 
     this.confirmationService.confirm({
       header: 'Eliminar rol',
-      message: `¿Eliminar el rol ${rol.nombre}? No se puede deshacer.`,
+      message: `¿Eliminar el rol ${escaparHtml(rol.nombre)}? No se puede deshacer.`,
       icon: 'pi pi-exclamation-triangle',
       rejectButtonProps: { label: 'Cancelar', severity: 'secondary', text: true, rounded: true },
       acceptButtonProps: { label: 'Eliminar', severity: 'danger', rounded: true },

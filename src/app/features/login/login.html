@@ -88,12 +88,12 @@
               <div class="col-12 flex flex-column align-items-center gap-2">
                 <p-inputotp
                   formControlName="codigo"
-                  [length]="4"
+                  [length]="6"
                   [integerOnly]="true"
                   [invalid]="isFieldInvalid(otpForm, 'codigo')"
                 />
                 @if (isFieldInvalid(otpForm, 'codigo')) {
-                  <p-message severity="error" size="small" variant="simple">Ingresa el código de 4 dígitos.</p-message>
+                  <p-message severity="error" size="small" variant="simple">Ingresa el código de 6 dígitos.</p-message>
                 }
               </div>
 

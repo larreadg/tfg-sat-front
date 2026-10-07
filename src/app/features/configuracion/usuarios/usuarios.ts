@@ -14,6 +14,7 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { FiltrosPanel } from '../../../shared/filtros-panel/filtros-panel';
+import { escaparHtml } from '../../../shared/escapar-html';
 import {
   etiquetaOpcion,
   resumenFiltros
@@ -160,7 +161,7 @@ export class Usuarios {
     const nombre = `${usuario.persona.nombres} ${usuario.persona.apellidos}`;
     this.confirmationService.confirm({
       header: 'Eliminar usuario',
-      message: `¿Eliminar a ${nombre} (${usuario.correoElectronico})? No se puede deshacer.`,
+      message: `¿Eliminar a ${escaparHtml(nombre)} (${escaparHtml(usuario.correoElectronico)})? No se puede deshacer.`,
       icon: 'pi pi-exclamation-triangle',
       rejectButtonProps: { label: 'Cancelar', severity: 'secondary', text: true, rounded: true },
       acceptButtonProps: { label: 'Eliminar', severity: 'danger', rounded: true },

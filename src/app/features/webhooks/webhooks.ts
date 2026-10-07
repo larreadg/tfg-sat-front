@@ -15,6 +15,7 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { FiltrosPanel } from '../../shared/filtros-panel/filtros-panel';
+import { escaparHtml } from '../../shared/escapar-html';
 import { AuthService } from '../../core/services/auth.service';
 import { WebhooksService } from '../../core/services/webhooks.service';
 import { ApiResponse } from '../../core/models/api-response.model';
@@ -257,7 +258,7 @@ export class Webhooks {
   eliminar(regla: ReglaWebhook): void {
     this.confirmationService.confirm({
       header: 'Eliminar la regla',
-      message: `Se va a eliminar "${regla.nombre}" y toda su bitácora de entregas. No se puede deshacer.`,
+      message: `Se va a eliminar "${escaparHtml(regla.nombre)}" y toda su bitácora de entregas. No se puede deshacer.`,
       icon: 'pi pi-exclamation-triangle',
       acceptLabel: 'Eliminar',
       rejectLabel: 'Cancelar',

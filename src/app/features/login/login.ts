@@ -48,7 +48,7 @@ export class Login {
   readonly cardSubtitle = computed(() =>
     this.stage() === 'credentials'
       ? 'Ingresa tus credenciales para continuar.'
-      : 'Ingresa el código de 4 dígitos que enviamos por SMS a tu teléfono registrado.'
+      : 'Ingresa el código de 6 dígitos que enviamos por SMS a tu teléfono registrado.'
   );
 
   /** Token del widget anti-bot; se pide al enviar, no al cargar la pantalla. */
@@ -69,8 +69,8 @@ export class Login {
   });
 
   readonly otpForm = this.fb.nonNullable.group({
-    // Codigo SMS de 4 digitos (ver doble-factor.service del back).
-    codigo: ['', [Validators.required, Validators.pattern(/^\d{4}$/)]]
+    // Codigo SMS de 6 digitos (ver doble-factor.service del back).
+    codigo: ['', [Validators.required, Validators.pattern(/^\d{6}$/)]]
   });
 
   constructor() {
