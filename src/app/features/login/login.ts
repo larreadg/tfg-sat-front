@@ -1,7 +1,6 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
@@ -13,6 +12,7 @@ import { MessageModule } from 'primeng/message';
 import { AuthService } from '../../core/services/auth.service';
 import { ApiResponse } from '../../core/models/api-response.model';
 import { environment } from '../../../environments/environment';
+import { Turnstile } from '../../shared/turnstile/turnstile';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
@@ -25,7 +25,8 @@ const RESEND_COOLDOWN_SECONDS = 30;
     InputTextModule,
     PasswordModule,
     InputOtpModule,
-    MessageModule
+    MessageModule,
+    Turnstile
   ],
   templateUrl: './login.html',
   styleUrl: './login.scss',
@@ -37,7 +38,6 @@ export class Login {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly messageService = inject(MessageService);
-  private readonly sanitizer = inject(DomSanitizer);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -48,10 +48,14 @@ export class Login {
   readonly cardSubtitle = computed(() =>
     this.stage() === 'credentials'
       ? 'Ingresa tus credenciales para continuar.'
-      : 'Ingresa el código de 6 dígitos que enviamos por SMS a tu teléfono registrado.'
+      : 'Ingresa el código de 4 dígitos que enviamos por SMS a tu teléfono registrado.'
   );
 
-  readonly captchaSvg = signal<SafeHtml | null>(null);
+  /** Token del widget anti-bot; se pide al enviar, no al cargar la pantalla. */
+  readonly turnstileToken = signal<string | null>(null);
+  /** `true` mientras corre el desafío de Cloudflare (antes de llamar a la API). */
+  readonly verificando = signal(false);
+  private readonly turnstile = viewChild(Turnstile);
   readonly resendCooldown = signal(0);
   readonly resendLabel = computed(() =>
     this.resendCooldown() > 0 ? `Reenviar código (${this.resendCooldown()}s)` : 'Reenviar código'
@@ -61,16 +65,15 @@ export class Login {
 
   readonly credentialsForm = this.fb.nonNullable.group({
     correoElectronico: ['', [Validators.required, Validators.email]],
-    contrasena: ['', Validators.required],
-    captcha: ['', Validators.required]
+    contrasena: ['', Validators.required]
   });
 
   readonly otpForm = this.fb.nonNullable.group({
-    codigo: ['', [Validators.required, Validators.pattern(/^\d{6}$/)]]
+    // Codigo SMS de 4 digitos (ver doble-factor.service del back).
+    codigo: ['', [Validators.required, Validators.pattern(/^\d{4}$/)]]
   });
 
   constructor() {
-    this.loadCaptcha();
     this.destroyRef.onDestroy(() => this.stopResendCountdown());
   }
 
@@ -79,32 +82,40 @@ export class Login {
     return !!control && control.invalid && (control.dirty || control.touched);
   }
 
-  loadCaptcha(): void {
-    this.authService.getCaptcha().subscribe({
-      next: (svg) => this.captchaSvg.set(this.sanitizer.bypassSecurityTrustHtml(svg)),
-      error: () => {
-        this.messageService.add({ severity: 'error', summary: 'Error', detail: 'No se pudo cargar el captcha.' });
-      }
-    });
-  }
-
-  submitCredentials(): void {
+  async submitCredentials(): Promise<void> {
     if (this.credentialsForm.invalid) {
       this.credentialsForm.markAllAsTouched();
       return;
     }
 
-    const { correoElectronico, contrasena, captcha } = this.credentialsForm.getRawValue();
+    // El desafío anti-bot corre recién acá, al enviar: si Cloudflare pide
+    // interacción, el widget aparece en este momento.
+    let token: string;
+    this.verificando.set(true);
+    try {
+      token = await this.turnstile()!.obtenerToken();
+    } catch (error) {
+      this.verificando.set(false);
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Verificación de seguridad',
+        detail: (error as Error).message
+      });
+      return;
+    }
+    this.verificando.set(false);
 
-    this.authService.login(correoElectronico, contrasena, captcha).subscribe({
+    const { correoElectronico, contrasena } = this.credentialsForm.getRawValue();
+
+    this.authService.login(correoElectronico, contrasena, token).subscribe({
       next: () => {
         this.credentialsForm.reset();
         this.startResendCountdown();
       },
       error: (error: HttpErrorResponse) => {
         this.showApiError(error, 'No se pudo iniciar sesión.');
-        this.credentialsForm.patchValue({ captcha: '' });
-        this.loadCaptcha();
+        // El token ya se canjeo contra Cloudflare: hay que pedir uno nuevo.
+        this.turnstile()?.reset();
       }
     });
   }
@@ -164,7 +175,8 @@ export class Login {
     this.stopResendCountdown();
     this.otpForm.reset();
     this.authService.backToLogin();
-    this.loadCaptcha();
+    // Al volver al formulario se pide un token nuevo: el anterior ya se canjeo.
+    this.turnstile()?.reset();
   }
 
   private startResendCountdown(): void {

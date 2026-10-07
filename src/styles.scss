@@ -28,3 +28,60 @@ body {
 body {
   font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
+
+/*
+ * Tema claro/oscuro. `color-scheme` es lo que hace que el tema oscuro valga más
+ * allá de los componentes de PrimeNG: las utilidades de color de PrimeFlex 4
+ * (`surface-card`, `surface-ground`, `surface-border`, `text-700`…) están
+ * escritas con `light-dark()`, que resuelve según este valor, y el navegador lo
+ * usa también para el fondo del documento y los controles nativos (barras de
+ * scroll, controles de archivo). La clase `app-dark` la pone `TemaService`.
+ */
+:root {
+  color-scheme: light;
+}
+
+:root.app-dark {
+  color-scheme: dark;
+}
+
+/*
+ * Leaflet es la única parte de la app que trae su propio CSS con colores fijos
+ * (misma excepción documentada en `shared/leaflet-map/leaflet-map.ts`): en tema
+ * oscuro el mapa quedaba como una lámina blanca y los controles como cajas
+ * blancas. Ese DOM lo crea Leaflet, fuera de todo encapsulamiento, así que el
+ * ajuste es global. Todo color sale de tokens `--p-*`.
+ */
+:root.app-dark {
+  /*
+   * Solo el panel de tiles: invertir el mapa completo daría marcadores, áreas y
+   * popups con los colores al revés, y el color de criticidad es información.
+   */
+  .leaflet-tile-pane {
+    filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.95);
+  }
+
+  .leaflet-container {
+    background: var(--p-surface-800);
+  }
+
+  .leaflet-bar a,
+  .leaflet-control-attribution,
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip {
+    background: var(--p-content-background);
+    color: var(--p-text-color);
+  }
+
+  .leaflet-bar a {
+    border-bottom-color: var(--p-content-border-color);
+
+    &:hover {
+      background: var(--p-content-hover-background);
+    }
+  }
+
+  .leaflet-control-attribution a {
+    color: var(--p-primary-color);
+  }
+}

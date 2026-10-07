@@ -1,0 +1,280 @@
+<div class="flex flex-column gap-4">
+  <div class="flex flex-column gap-2">
+    <h1 class="text-2xl font-semibold m-0">Reportes</h1>
+    <p class="text-color-secondary m-0">
+      Reportes ciudadanos recibidos por los distintos canales, con su nivel de criticidad y el estado del análisis
+      asistido por IA. El nivel refleja la prioridad de revisión del reporte.
+    </p>
+  </div>
+
+  <!-- Filtros -->
+  <app-filtros-panel [resumen]="filtrosAplicados()">
+    <div class="grid formgrid">
+      <div class="field col-12 md:col-6 lg:col-3 mb-0">
+        <label for="filtro-rango" class="block text-sm font-medium mb-2">Rango de fechas</label>
+        <p-datepicker
+          inputId="filtro-rango"
+          [(ngModel)]="rango"
+          selectionMode="range"
+          [readonlyInput]="true"
+          dateFormat="dd/mm/yy"
+          [maxDate]="hoy"
+          [showButtonBar]="true"
+          [showClear]="true"
+          placeholder="Desde – Hasta"
+          styleClass="w-full"
+        />
+      </div>
+
+      @if (puedeVerTelefono()) {
+        <div class="field col-12 md:col-6 lg:col-3 mb-0">
+          <label for="filtro-telefono" class="block text-sm font-medium mb-2">Teléfono</label>
+          <p-iconfield>
+            <p-inputicon class="pi pi-phone" />
+            <input
+              pInputText
+              id="filtro-telefono"
+              type="tel"
+              inputmode="tel"
+              [(ngModel)]="telefono"
+              (keyup.enter)="aplicar()"
+              placeholder="Coincidencia parcial"
+              [fluid]="true"
+            />
+          </p-iconfield>
+        </div>
+      }
+
+      <div class="field col-12 sm:col-4 lg:col-2 mb-0">
+        <label for="filtro-canal" class="block text-sm font-medium mb-2">Canal</label>
+        <p-select
+          inputId="filtro-canal"
+          [(ngModel)]="canal"
+          [options]="canalOpciones"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Todos"
+          [showClear]="true"
+          styleClass="w-full"
+        />
+      </div>
+
+      <div class="field col-12 sm:col-4 lg:col-2 mb-0">
+        <label for="filtro-estado" class="block text-sm font-medium mb-2">Análisis</label>
+        <p-select
+          inputId="filtro-estado"
+          [(ngModel)]="estado"
+          [options]="estadoOpciones"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Todos"
+          [showClear]="true"
+          styleClass="w-full"
+        />
+      </div>
+
+      <div class="field col-12 sm:col-4 lg:col-2 mb-0">
+        <label for="filtro-nivel" class="block text-sm font-medium mb-2">Nivel</label>
+        <p-select
+          inputId="filtro-nivel"
+          [(ngModel)]="nivel"
+          [options]="nivelOpciones"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Todos"
+          [showClear]="true"
+          styleClass="w-full"
+        />
+      </div>
+
+      <div
+        class="col-12 flex flex-column sm:flex-row justify-content-end align-items-stretch sm:align-items-center gap-2 mt-3"
+      >
+        <p-button
+          label="Limpiar"
+          icon="pi pi-filter-slash"
+          [text]="true"
+          [rounded]="true"
+          severity="secondary"
+          (onClick)="limpiar()"
+        />
+        <p-button label="Aplicar" icon="pi pi-filter" [rounded]="true" (onClick)="aplicar()" />
+      </div>
+    </div>
+  </app-filtros-panel>
+
+  <!-- Contenido -->
+  @if (loading()) {
+    <div class="flex flex-column gap-2">
+      @for (fila of filasSkeleton; track $index) {
+        <p-skeleton height="3.25rem" borderRadius="8px" />
+      }
+    </div>
+  } @else if (error()) {
+    <p-card>
+      <div class="flex flex-column align-items-center gap-3 py-5 text-center">
+        <i class="pi pi-exclamation-triangle text-3xl text-color-secondary"></i>
+        <div class="flex flex-column gap-1">
+          <span class="font-medium">No se pudieron cargar los reportes</span>
+          <span class="text-sm text-color-secondary">Revisá tu conexión e intentá nuevamente.</span>
+        </div>
+        <p-button label="Reintentar" icon="pi pi-refresh" [rounded]="true" (onClick)="reintentar()" />
+      </div>
+    </p-card>
+  } @else if (reportes().length === 0) {
+    <p-card>
+      <div class="flex flex-column align-items-center gap-3 py-5 text-center">
+        <i class="pi pi-inbox text-3xl text-color-secondary"></i>
+        <div class="flex flex-column gap-1">
+          <span class="font-medium">No hay reportes para estos filtros</span>
+          <span class="text-sm text-color-secondary">Ampliá el rango de fechas o quitá filtros para ver más resultados.</span>
+        </div>
+        <p-button label="Limpiar filtros" icon="pi pi-filter-slash" [text]="true" [rounded]="true" (onClick)="limpiar()" />
+      </div>
+    </p-card>
+  } @else {
+    <!-- Desktop: tabla -->
+    <div class="hidden md:block">
+      <p-table [value]="reportes()" [tableStyle]="{ 'min-width': '62rem' }" [rowHover]="true">
+        <ng-template #header>
+          <tr>
+            <th style="width: 6rem">Foto</th>
+            <th>Código</th>
+            @if (puedeVerTelefono()) {
+              <th>Teléfono</th>
+            }
+            <th>Ubicación</th>
+            <th>Canal</th>
+            <th>Fecha</th>
+            <th>Nivel</th>
+            <th>Análisis</th>
+            <th style="width: 7rem"></th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-r>
+          <tr>
+            <td>
+              @if (r.fotos.length > 0) {
+                <div class="inline-flex align-items-center gap-1">
+                  <p-image
+                    [src]="urlFoto(r.fotos[0].url)"
+                    [alt]="'Foto del reporte ' + r.codigoPublico"
+                    [preview]="true"
+                    styleClass="block"
+                    imageClass="border-round"
+                    [imageStyle]="{ 'object-fit': 'cover', width: '3rem', height: '3rem' }"
+                  />
+                  @if (r.fotos.length > 1) {
+                    <span class="text-xs text-color-secondary" [pTooltip]="r.fotos.length + ' fotos en el reporte'" tooltipPosition="left">
+                      +{{ r.fotos.length - 1 }}
+                    </span>
+                  }
+                </div>
+              } @else {
+                <span class="text-color-secondary">—</span>
+              }
+            </td>
+            <td>
+              <a [routerLink]="['/reportes', r.id]" class="font-medium text-primary no-underline">{{ r.codigoPublico }}</a>
+            </td>
+            @if (puedeVerTelefono()) {
+              <td class="white-space-nowrap">
+                @if (r.telefono) {
+                  <span class="inline-flex align-items-center gap-2">
+                    <i class="pi pi-phone text-color-secondary text-sm"></i>{{ r.telefono }}
+                  </span>
+                } @else {
+                  <span class="text-color-secondary">—</span>
+                }
+              </td>
+            }
+            <td>
+              @if (ubicacionResumen(r.ubicacion); as resumen) {
+                <span class="inline-flex align-items-center gap-2" [pTooltip]="r.ubicacion.direccion ?? resumen" tooltipPosition="left">
+                  <i class="pi pi-map-marker text-color-secondary text-sm"></i>{{ resumen }}
+                </span>
+              } @else {
+                <span class="text-color-secondary">—</span>
+              }
+            </td>
+            <td>
+              <span class="inline-flex align-items-center gap-2">
+                <i [class]="canalIcono(r.canal)" class="text-color-secondary"></i>{{ canalLabel(r.canal) }}
+              </span>
+            </td>
+            <td class="white-space-nowrap">{{ r.fecha | date: 'dd/MM/yy HH:mm' }}</td>
+            <td><app-nivel-tag [nivel]="r.nivelPreliminar" /></td>
+            <td><app-estado-analisis-tag [estado]="r.estadoAnalisis" /></td>
+            <td class="text-right">
+              <p-button
+                label="Ver"
+                icon="pi pi-arrow-right"
+                iconPos="right"
+                [text]="true"
+                [rounded]="true"
+                size="small"
+                (onClick)="ver(r.id)"
+              />
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+
+    <!-- Mobile: tarjetas -->
+    <div class="block md:hidden flex flex-column gap-3">
+      @for (r of reportes(); track r.id) {
+        <p-card>
+          <div class="flex align-items-start gap-3">
+            @if (r.fotos.length > 0) {
+              <div class="flex flex-column align-items-center gap-1">
+                <p-image
+                  [src]="urlFoto(r.fotos[0].url)"
+                  [alt]="'Foto del reporte ' + r.codigoPublico"
+                  [preview]="true"
+                  styleClass="block"
+                  imageClass="border-round"
+                  [imageStyle]="{ 'object-fit': 'cover', width: '4rem', height: '4rem' }"
+                />
+                @if (r.fotos.length > 1) {
+                  <span class="text-xs text-color-secondary">+{{ r.fotos.length - 1 }}</span>
+                }
+              </div>
+            }
+            <a [routerLink]="['/reportes', r.id]" class="no-underline text-color flex-1">
+              <div class="flex flex-column gap-2">
+                <div class="flex align-items-center justify-content-between gap-2">
+                  <span class="font-semibold text-primary">{{ r.codigoPublico }}</span>
+                  <app-nivel-tag [nivel]="r.nivelPreliminar" />
+                </div>
+                @if (puedeVerTelefono() && r.telefono) {
+                  <span class="inline-flex align-items-center gap-2 text-sm text-color-secondary">
+                    <i class="pi pi-phone text-xs"></i>{{ r.telefono }}
+                  </span>
+                }
+                <div class="flex align-items-center flex-wrap gap-2 text-sm text-color-secondary">
+                  <span class="inline-flex align-items-center gap-1"><i [class]="canalIcono(r.canal)"></i>{{ canalLabel(r.canal) }}</span>
+                  <span>·</span>
+                  <span>{{ r.fecha | date: 'dd/MM/yy HH:mm' }}</span>
+                </div>
+                <app-estado-analisis-tag [estado]="r.estadoAnalisis" />
+              </div>
+            </a>
+          </div>
+        </p-card>
+      }
+    </div>
+  }
+
+  @if (!error() && total() > 0) {
+    <p-paginator
+      [first]="first()"
+      [rows]="pageSize()"
+      [totalRecords]="total()"
+      [rowsPerPageOptions]="[10, 20, 50]"
+      [showCurrentPageReport]="true"
+      currentPageReportTemplate="Mostrando {first}–{last} de {totalRecords}"
+      (onPageChange)="onPage($event)"
+    />
+  }
+</div>

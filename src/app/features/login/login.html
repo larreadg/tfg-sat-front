@@ -21,12 +21,12 @@
     <div class="grid w-full">
       <div class="col-12 lg:col-8 lg:col-offset-2 xl:col-6 xl:col-offset-3">
         <div class="flex lg:hidden align-items-center justify-content-center mb-5">
-          <img src="logo.png" [alt]="appName" style="width: 6rem; height: auto" />
+          <img src="logo1.webp" [alt]="appName" style="width: 6rem; height: auto" />
         </div>
 
         <p-card styleClass="shadow-2" [style]="{ '--p-card-body-padding': '2.5rem' }">
           <div class="flex flex-column align-items-center gap-2 text-center mb-4">
-            <img src="logo3.webp" [alt]="appName" style="width: 2.75rem; height: auto" />
+            <img src="logo1.webp" [alt]="appName" style="width: 2.75rem; height: auto" />
             <h2 class="text-2xl font-semibold m-0">{{ cardTitle() }}</h2>
             <p class="text-color-secondary m-0">{{ cardSubtitle() }}</p>
           </div>
@@ -68,35 +68,19 @@
                 }
               </div>
 
-              <div class="col-12 flex flex-column gap-2">
-                <div class="flex align-items-center gap-2">
-                  <div class="captcha-box flex-shrink-0 border-round surface-100" [innerHTML]="captchaSvg()"></div>
-                  <input
-                    pInputText
-                    pSize="small"
-                    formControlName="captcha"
-                    placeholder="Texto de la imagen"
-                    [invalid]="isFieldInvalid(credentialsForm, 'captcha')"
-                    class="flex-1 min-w-0"
-                  />
-                  <p-button
-                    type="button"
-                    icon="pi pi-refresh"
-                    size="small"
-                    [text]="true"
-                    [rounded]="true"
-                    severity="secondary"
-                    ariaLabel="Refrescar captcha"
-                    (onClick)="loadCaptcha()"
-                  />
-                </div>
-                @if (isFieldInvalid(credentialsForm, 'captcha')) {
-                  <p-message severity="error" size="small" variant="simple">El captcha es obligatorio.</p-message>
-                }
+              <!-- Anti-bot: invisible hasta que Cloudflare pida interacción al enviar -->
+              <div class="col-12 flex justify-content-center">
+                <app-turnstile [(token)]="turnstileToken" accion="login-panel" />
               </div>
 
               <div class="col-12 flex justify-content-center">
-                <p-button icon="pi pi-sign-in" [rounded]="true" label="Ingresar" type="submit" [loading]="loading()" />
+                <p-button
+                  icon="pi pi-sign-in"
+                  [rounded]="true"
+                  label="Ingresar"
+                  type="submit"
+                  [loading]="loading() || verificando()"
+                />
               </div>
             </form>
           } @else {
@@ -104,12 +88,12 @@
               <div class="col-12 flex flex-column align-items-center gap-2">
                 <p-inputotp
                   formControlName="codigo"
-                  [length]="6"
+                  [length]="4"
                   [integerOnly]="true"
                   [invalid]="isFieldInvalid(otpForm, 'codigo')"
                 />
                 @if (isFieldInvalid(otpForm, 'codigo')) {
-                  <p-message severity="error" size="small" variant="simple">Ingresa el código de 6 dígitos.</p-message>
+                  <p-message severity="error" size="small" variant="simple">Ingresa el código de 4 dígitos.</p-message>
                 }
               </div>
 

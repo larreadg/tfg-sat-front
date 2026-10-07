@@ -32,7 +32,13 @@
             "styles": [
               "node_modules/primeicons/primeicons.css",
               "node_modules/primeflex/primeflex.css",
+              "node_modules/leaflet/dist/leaflet.css",
+              "node_modules/@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css",
+              "node_modules/quill/dist/quill.snow.css",
               "src/styles.scss"
+            ],
+            "allowedCommonJsDependencies": [
+              "leaflet"
             ]
           },
           "configurations": {
@@ -67,6 +73,17 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "host": "0.0.0.0",
+            "ssl": true,
+            "sslCert": "certs/cert.pem",
+            "sslKey": "certs/key.pem",
+            "allowedHosts": [
+              "192.168.100.6",
+              "localhost",
+              "127.0.0.1"
+            ]
+          },
           "configurations": {
             "production": {
               "buildTarget": "tfg-sat-front:build:production"

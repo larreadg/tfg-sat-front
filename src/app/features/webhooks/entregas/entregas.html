@@ -1,0 +1,107 @@
+<p-dialog
+  [visible]="visible()"
+  (visibleChange)="visible.set($event)"
+  [modal]="true"
+  [draggable]="false"
+  [dismissableMask]="true"
+  [header]="'Historial de: ' + (regla()?.nombre ?? '')"
+  [style]="{ width: '52rem' }"
+  [breakpoints]="{ '960px': '95vw' }"
+>
+  <div class="flex flex-column gap-3">
+    <div class="flex align-items-center justify-content-between gap-2 flex-wrap">
+      <span class="text-sm text-color-secondary">
+        Cada vez que esta regla intentó avisar, con el resultado. Las marcadas como prueba las generó el botón
+        de prueba, no una alerta real.
+      </span>
+      <p-button
+        icon="pi pi-refresh"
+        label="Actualizar"
+        [text]="true"
+        [rounded]="true"
+        size="small"
+        (onClick)="recargar()"
+      />
+    </div>
+
+    <p-table [value]="loading() ? filasSkeleton : entregas()" [tableStyle]="{ 'min-width': '44rem' }">
+      <ng-template #header>
+        <tr>
+          <th style="width: 10rem">Fecha</th>
+          <th style="width: 6rem">Resultado</th>
+          <th>Detalle</th>
+          <th style="width: 6rem">Duración</th>
+          <th style="width: 3rem"></th>
+        </tr>
+      </ng-template>
+
+      <ng-template #body let-e>
+        @if (loading()) {
+          <tr>
+            <td colspan="5"><p-skeleton height="1.5rem" /></td>
+          </tr>
+        } @else {
+          <tr>
+            <td class="white-space-nowrap text-sm">
+              {{ e.fechaCreacion | date: 'dd/MM/yy HH:mm:ss' }}
+              @if (e.esPrueba) {
+                <p-tag value="prueba" severity="secondary" [rounded]="true" styleClass="ml-1" />
+              }
+            </td>
+            <td>
+              <p-tag
+                [value]="e.exito ? 'Enviada' : 'Falló'"
+                [severity]="e.exito ? 'success' : 'danger'"
+                [rounded]="true"
+              />
+            </td>
+            <td class="text-sm">{{ e.detalle }}</td>
+            <td class="text-sm white-space-nowrap">{{ e.duracionMs }} ms</td>
+            <td>
+              <p-button
+                [icon]="expandida() === e.id ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+                [text]="true"
+                [rounded]="true"
+                severity="secondary"
+                size="small"
+                pTooltip="Ver los datos que se enviaron"
+                tooltipPosition="left"
+                ariaLabel="Ver los datos que se enviaron"
+                (onClick)="alternar(e.id)"
+              />
+            </td>
+          </tr>
+          @if (expandida() === e.id) {
+            <tr>
+              <td colspan="5">
+                <div class="surface-100 border-round p-3">
+                  <span class="text-sm font-medium block mb-2">Datos enviados</span>
+                  <!-- `pre` con wrap: un JSON largo no debe generar scroll horizontal. -->
+                  <pre class="m-0 text-sm" style="white-space: pre-wrap; word-break: break-word">{{
+                    cargaUtilTexto(e)
+                  }}</pre>
+                </div>
+              </td>
+            </tr>
+          }
+        }
+      </ng-template>
+
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="5">
+            <div class="flex flex-column align-items-center gap-2 py-5">
+              <i class="pi pi-inbox text-color-secondary" style="font-size: 2rem"></i>
+              <span class="text-color-secondary">Esta regla todavía no envió ningún aviso.</span>
+              <span class="text-sm text-color-secondary">Probala para ver cómo queda.</span>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+
+    @if (total() > pageSize) {
+      <p-paginator [first]="first()" [rows]="pageSize" [totalRecords]="total()" (onPageChange)="onPage($event)" />
+    }
+  </div>
+</p-dialog>

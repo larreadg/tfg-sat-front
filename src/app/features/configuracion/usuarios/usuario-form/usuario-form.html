@@ -1,0 +1,169 @@
+<p-dialog
+  [visible]="visible()"
+  (visibleChange)="visible.set($event)"
+  [header]="titulo()"
+  [modal]="true"
+  [draggable]="false"
+  [dismissableMask]="true"
+  [style]="{ width: '38rem' }"
+  [breakpoints]="{ '768px': '95vw' }"
+>
+  <form [formGroup]="form" class="grid formgrid" (ngSubmit)="guardar()">
+    @if (errorServidor(); as mensaje) {
+      <div class="col-12">
+        <p-message severity="error" styleClass="w-full">{{ mensaje }}</p-message>
+      </div>
+    }
+
+    <!-- Datos de la persona: solo se cargan en el alta (ver comentario del componente). -->
+    <div class="col-12 md:col-6 field">
+      <label for="nombres" class="block text-sm font-medium mb-2">Nombres</label>
+      <input
+        pInputText
+        id="nombres"
+        formControlName="nombres"
+        [readonly]="esEdicion()"
+        [invalid]="isFieldInvalid('nombres')"
+        [fluid]="true"
+      />
+      @if (isFieldInvalid('nombres')) {
+        <p-message severity="error" size="small" variant="simple">Los nombres son obligatorios.</p-message>
+      }
+    </div>
+
+    <div class="col-12 md:col-6 field">
+      <label for="apellidos" class="block text-sm font-medium mb-2">Apellidos</label>
+      <input
+        pInputText
+        id="apellidos"
+        formControlName="apellidos"
+        [readonly]="esEdicion()"
+        [invalid]="isFieldInvalid('apellidos')"
+        [fluid]="true"
+      />
+      @if (isFieldInvalid('apellidos')) {
+        <p-message severity="error" size="small" variant="simple">Los apellidos son obligatorios.</p-message>
+      }
+    </div>
+
+    <div class="col-12 md:col-6 field">
+      <label for="documento" class="block text-sm font-medium mb-2">Documento</label>
+      <input
+        pInputText
+        id="documento"
+        formControlName="documento"
+        [readonly]="esEdicion()"
+        [invalid]="isFieldInvalid('documento')"
+        [fluid]="true"
+      />
+      @if (isFieldInvalid('documento')) {
+        <p-message severity="error" size="small" variant="simple">El documento es obligatorio.</p-message>
+      }
+    </div>
+
+    <div class="col-12 md:col-6 field">
+      <label for="telefono" class="block text-sm font-medium mb-2">Teléfono</label>
+      <input
+        pInputText
+        id="telefono"
+        formControlName="telefono"
+        placeholder="595XXXXXXXXX"
+        [invalid]="isFieldInvalid('telefono')"
+        [fluid]="true"
+      />
+      @if (isFieldInvalid('telefono')) {
+        <p-message severity="error" size="small" variant="simple">El teléfono es obligatorio.</p-message>
+      }
+    </div>
+
+    @if (esEdicion()) {
+      <div class="col-12">
+        <p-message severity="secondary" variant="simple" styleClass="w-full">
+          <span class="text-sm">Nombres, apellidos y documento no se editan desde acá.</span>
+        </p-message>
+      </div>
+    }
+
+    <div class="col-12 field">
+      <label for="correoElectronico" class="block text-sm font-medium mb-2">Correo electrónico</label>
+      <input
+        pInputText
+        id="correoElectronico"
+        type="email"
+        formControlName="correoElectronico"
+        placeholder="usuario@dominio.com"
+        autocomplete="email"
+        [invalid]="isFieldInvalid('correoElectronico')"
+        [fluid]="true"
+      />
+      @if (isFieldInvalid('correoElectronico')) {
+        <p-message severity="error" size="small" variant="simple">Ingresá un correo electrónico válido.</p-message>
+      }
+    </div>
+
+    <div class="col-12 field">
+      <label for="contrasena" class="block text-sm font-medium mb-2">
+        Contraseña
+        @if (esEdicion()) {
+          <span class="text-color-secondary font-normal">(dejala vacía para no cambiarla)</span>
+        }
+      </label>
+      <p-password
+        inputId="contrasena"
+        formControlName="contrasena"
+        [feedback]="false"
+        [toggleMask]="true"
+        [fluid]="true"
+        autocomplete="new-password"
+        [invalid]="isFieldInvalid('contrasena')"
+      />
+      @if (isFieldInvalid('contrasena')) {
+        <p-message severity="error" size="small" variant="simple">
+          Mínimo {{ largoMinimoContrasena }} caracteres.
+        </p-message>
+      }
+    </div>
+
+    <div class="col-12 field">
+      <label for="rolIds" class="block text-sm font-medium mb-2">Roles</label>
+      <p-multiselect
+        inputId="rolIds"
+        formControlName="rolIds"
+        [options]="roles()"
+        optionLabel="nombre"
+        optionValue="id"
+        display="chip"
+        placeholder="Sin roles asignados"
+        emptyMessage="No hay roles definidos"
+        [fluid]="true"
+      />
+      <small class="text-color-secondary">Los permisos del usuario salen de sus roles.</small>
+    </div>
+
+    <div class="col-12 field">
+      <div class="flex align-items-center gap-3">
+        <p-toggleswitch inputId="activo" formControlName="activo" />
+        <label for="activo" class="text-sm font-medium">Usuario activo</label>
+      </div>
+      <small class="text-color-secondary">Un usuario inactivo no puede iniciar sesión.</small>
+    </div>
+  </form>
+
+  <ng-template #footer>
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [text]="true"
+      [rounded]="true"
+      [disabled]="guardando()"
+      (onClick)="cancelar()"
+    />
+    <p-button
+      [label]="esEdicion() ? 'Guardar cambios' : 'Crear usuario'"
+      icon="pi pi-check"
+      [rounded]="true"
+      [loading]="guardando()"
+      (onClick)="guardar()"
+    />
+  </ng-template>
+</p-dialog>

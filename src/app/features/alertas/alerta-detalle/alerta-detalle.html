@@ -1,0 +1,291 @@
+<div class="flex flex-column gap-4">
+  <!-- Encabezado. Una línea de identidad (qué alerta, qué tan grave, en qué paso
+       está) y otra de procedencia. Antes había tres: el motivo repetía el código
+       del reporte y el nivel que ya dicen las etiquetas, y la fila de iconos
+       repetía el código una vez más. -->
+  <div class="flex align-items-start justify-content-between gap-3 flex-wrap">
+    <div class="flex flex-column gap-1">
+      <div class="flex align-items-center gap-2 flex-wrap">
+        <h1 class="text-2xl font-semibold m-0">Alerta #{{ alertaId }}</h1>
+        @if (detalle(); as d) {
+          <app-nivel-tag [nivel]="d.nivel" />
+          <app-estado-alerta-tag [estado]="d.estado" />
+        }
+      </div>
+
+      @if (detalle(); as d) {
+        <p class="m-0 text-sm text-color-secondary">
+          @if (d.puntoCritico) {
+            <span class="text-color font-medium">Punto crítico #{{ d.puntoCritico.id }}</span>
+          } @else if (d.reporte) {
+            <span class="text-color font-medium">Reporte {{ d.reporte.codigoPublico }}</span>
+          }
+          <span aria-hidden="true"> · </span>
+          <span class="text-color font-medium">{{ cantidadReportes() }}</span>
+          {{ cantidadReportes() === 1 ? 'reporte' : 'reportes' }} en {{ d.radioMetros }} m
+          @if (d.ventanaInicio && d.ventanaFin) {
+            <span aria-hidden="true"> · </span>
+            {{ d.ventanaInicio | date: 'dd/MM/yy HH:mm' }} – {{ d.ventanaFin | date: 'dd/MM/yy HH:mm' }}
+          }
+        </p>
+      }
+    </div>
+
+    <p-button
+      label="Volver al tablero"
+      icon="pi pi-arrow-left"
+      [text]="true"
+      [rounded]="true"
+      severity="secondary"
+      (onClick)="volver()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="flex flex-column gap-3">
+      <p-skeleton height="1.5rem" width="60%" />
+      <div class="grid">
+        <div class="col-12 lg:col-7"><p-skeleton height="18rem" borderRadius="8px" /></div>
+        <div class="col-12 lg:col-5"><p-skeleton height="18rem" borderRadius="8px" /></div>
+      </div>
+    </div>
+  } @else if (error()) {
+    <div class="flex flex-column align-items-center gap-3 py-5 text-center">
+      <i class="pi pi-exclamation-triangle text-3xl text-color-secondary"></i>
+      <div class="flex flex-column gap-1">
+        <span class="font-medium">No se pudo cargar el detalle</span>
+        <span class="text-sm text-color-secondary">Revisá tu conexión e intentá nuevamente.</span>
+      </div>
+      <p-button label="Reintentar" icon="pi pi-refresh" [rounded]="true" (onClick)="reintentar()" />
+    </div>
+  } @else if (detalle(); as d) {
+    <div class="flex flex-column gap-3">
+      <!-- Pestañas: a la izquierda lo de siempre (el mapa con los reportes que
+           sustentan la alerta) y el seguimiento del trabajo que se hace sobre
+           ella. `lazy` instancia cada pestaña al abrirla; el mapa queda en la
+           activa por defecto porque Leaflet necesita tamaño real al nacer. -->
+      <p-tabs [value]="tabActivo()" [scrollable]="true" [lazy]="true" (valueChange)="cambiarTab($event)">
+        <p-tablist>
+          <p-tab value="reportes">
+            <span class="flex align-items-center gap-2">
+              <i class="pi pi-map" aria-hidden="true"></i>
+              <span class="white-space-nowrap">Reportes</span>
+              @if (cantidadReportes() > 0) {
+                <p-badge [value]="cantidadReportes()" severity="secondary" />
+              }
+            </span>
+          </p-tab>
+          <p-tab value="seguimiento">
+            <span class="flex align-items-center gap-2">
+              <i class="pi pi-comments" aria-hidden="true"></i>
+              <span class="white-space-nowrap">Seguimiento</span>
+              @if (resumenSeguimiento(); as r) {
+                @if (r.comentarios > 0) {
+                  <p-badge [value]="r.comentarios" severity="secondary" />
+                }
+              }
+            </span>
+          </p-tab>
+          <p-tab value="tareas">
+            <span class="flex align-items-center gap-2">
+              <i class="pi pi-check-square" aria-hidden="true"></i>
+              <span class="white-space-nowrap">Tareas</span>
+              @if (resumenSeguimiento(); as r) {
+                @if (r.tareas.total > 0) {
+                  <p-badge
+                    [value]="progresoTareas(r)"
+                    [severity]="r.tareas.vencidas > 0 ? 'danger' : 'secondary'"
+                  />
+                }
+              }
+            </span>
+          </p-tab>
+          <p-tab value="archivos">
+            <span class="flex align-items-center gap-2">
+              <i class="pi pi-paperclip" aria-hidden="true"></i>
+              <span class="white-space-nowrap">Archivos</span>
+              @if (resumenSeguimiento(); as r) {
+                @if (r.adjuntos > 0) {
+                  <p-badge [value]="r.adjuntos" severity="secondary" />
+                }
+              }
+            </span>
+          </p-tab>
+        </p-tablist>
+
+        <p-tabpanels>
+          <p-tabpanel value="reportes">
+            <ng-template #content>
+          @if (cantidadReportes() === 0) {
+            <p-message
+              severity="info"
+              text="No quedan reportes dentro del área y la ventana de esta alerta."
+            />
+          } @else {
+            <div class="grid">
+              <!-- Mapa -->
+              <div class="col-12 lg:col-7">
+                <app-leaflet-map
+                  [puntos]="puntos()"
+                  [enfocar]="enfoque()"
+                  [zoomMaximoAjuste]="zoomMaximo"
+                  [zoomMinimoEnfoque]="zoomEnfoque"
+                  [agrupar]="true"
+                  [altura]="alturaPanel"
+                  etiquetaAccesible="Mapa de los reportes que componen la alerta"
+                  (seleccionar)="seleccionarDesdeMapa($event)"
+                />
+              </div>
+
+              <!-- La lista manda: es lo que se recorre cuando la alerta junta
+                   varios reportes. La ficha de cada uno se abre en un diálogo
+                   (más abajo) para no comerle el alto a la lista. -->
+              <div class="col-12 lg:col-5">
+                <p-listbox
+                  [options]="d.reportes"
+                  [ngModel]="seleccionado()"
+                  (onChange)="seleccionarDesdeLista($event)"
+                  optionLabel="codigoPublico"
+                  [scrollHeight]="alturaLista()"
+                  [filter]="conFiltroReportes()"
+                  filterPlaceHolder="Buscar por código"
+                  emptyFilterMessage="Ningún reporte coincide"
+                  styleClass="w-full"
+                  ariaLabel="Reportes que componen la alerta"
+                >
+                  <ng-template #item let-r>
+                    <div class="flex align-items-center gap-2 w-full">
+                      <p-tag
+                        [value]="numeroOrden(r.orden)"
+                        [severity]="severidadNivel(r.nivelPreliminar)"
+                        [rounded]="true"
+                      />
+                      <div class="flex flex-column flex-grow-1 min-w-0">
+                        <span class="font-medium">
+                          {{ r.codigoPublico }}
+                          @if (r.esOrigen) {
+                            <span class="text-xs text-color-secondary font-normal">· originó la alerta</span>
+                          }
+                        </span>
+                        <span class="text-xs text-color-secondary">
+                          {{ r.fecha | date: 'dd/MM/yy HH:mm' }} · a {{ r.distanciaMetros }} m del centro
+                        </span>
+                      </div>
+                      <!-- Insinúa que la fila abre algo, ahora que la ficha ya no
+                           está a la vista debajo. -->
+                      <i class="pi pi-angle-right text-color-secondary flex-shrink-0" aria-hidden="true"></i>
+                    </div>
+                  </ng-template>
+                </p-listbox>
+              </div>
+            </div>
+          }
+            </ng-template>
+          </p-tabpanel>
+
+          <p-tabpanel value="seguimiento">
+            <ng-template #content>
+              <app-seguimiento-comentarios [alertaId]="d.id" (comentarioAgregado)="alSumarComentario()" />
+            </ng-template>
+          </p-tabpanel>
+
+          <p-tabpanel value="tareas">
+            <ng-template #content>
+              <app-seguimiento-tareas [alertaId]="d.id" (tareasCambiaron)="alCambiarTareas()" />
+            </ng-template>
+          </p-tabpanel>
+
+          <p-tabpanel value="archivos">
+            <ng-template #content>
+              <app-seguimiento-archivos [alertaId]="d.id" (adjuntosCambiaron)="alCambiarAdjuntos()" />
+            </ng-template>
+          </p-tabpanel>
+        </p-tabpanels>
+      </p-tabs>
+    </div>
+  }
+
+</div>
+
+<!-- Ficha del reporte elegido en la lista o en el mapa. -->
+<p-dialog
+  [(visible)]="fichaVisible"
+  [modal]="true"
+  [draggable]="false"
+  [dismissableMask]="true"
+  [style]="{ width: '34rem' }"
+  [breakpoints]="{ '575px': '94vw' }"
+>
+  @if (seleccionado(); as r) {
+    <ng-template #header>
+      <div class="flex align-items-center gap-2 flex-wrap">
+        <p-tag [value]="numeroOrden(r.orden)" [severity]="severidadNivel(r.nivelPreliminar)" [rounded]="true" />
+        <span class="font-semibold">{{ r.codigoPublico }}</span>
+        @if (r.esOrigen) {
+          <p-tag value="Originó la alerta" severity="contrast" [rounded]="true" />
+        }
+      </div>
+    </ng-template>
+
+    <div class="flex flex-column gap-3">
+      <div class="flex align-items-center flex-wrap gap-2">
+        <app-nivel-tag [nivel]="r.nivelPreliminar" />
+        <app-estado-analisis-tag [estado]="r.estadoAnalisis" />
+        <span class="inline-flex align-items-center gap-1 text-sm text-color-secondary">
+          <i [class]="canalIcono(r.canal)"></i>{{ canalLabel(r.canal) }}
+        </span>
+      </div>
+
+      <div class="grid text-sm">
+        <div class="col-6 flex flex-column gap-1">
+          <span class="text-xs text-color-secondary">Fecha</span>
+          <span>{{ r.fecha | date: 'dd/MM/yy HH:mm' }}</span>
+        </div>
+        <div class="col-6 flex flex-column gap-1">
+          <span class="text-xs text-color-secondary">Distancia al centro</span>
+          <span>{{ r.distanciaMetros }} m</span>
+        </div>
+        <div class="col-6 flex flex-column gap-1">
+          <span class="text-xs text-color-secondary">Criticidad</span>
+          <span>{{ r.criticidad !== null ? (r.criticidad | number: '1.2-2') : '—' }}</span>
+        </div>
+        <div class="col-6 flex flex-column gap-1">
+          <span class="text-xs text-color-secondary">Riesgo IA</span>
+          <span>{{ r.riesgoScore !== null ? r.riesgoScore + ' / 5' : '—' }}</span>
+        </div>
+      </div>
+
+      @if (r.resumenIa) {
+        <div class="flex flex-column gap-1">
+          <span class="text-xs text-color-secondary">Resumen del análisis</span>
+          <p class="m-0 text-sm">{{ r.resumenIa }}</p>
+        </div>
+      }
+
+      <span class="inline-flex align-items-center gap-1 text-sm text-color-secondary">
+        @if (r.tieneFotos) {
+          <i class="pi pi-images"></i>Incluye fotos
+        } @else {
+          Sin fotos
+        }
+      </span>
+    </div>
+
+    <ng-template #footer>
+      <p-button
+        label="Cerrar"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        (onClick)="cerrarFicha()"
+      />
+      <p-button
+        label="Ver reporte completo"
+        icon="pi pi-arrow-right"
+        iconPos="right"
+        [rounded]="true"
+        [routerLink]="['/reportes', r.id]"
+      />
+    </ng-template>
+  }
+</p-dialog>

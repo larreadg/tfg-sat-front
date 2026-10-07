@@ -1,0 +1,116 @@
+@let a = adjunto();
+
+@if (compacto()) {
+  <!-- En el hilo el adjunto es una referencia, no el contenido: el comentario lo
+       es. Por eso una imagen entra como miniatura del alto de dos renglones y un
+       documento como chip de la misma altura, en una sola tira. El archivo
+       completo se ve al tocarlo y la ficha con nombre y peso vive en Archivos. -->
+  @if (a.esImagen) {
+    @if (objectUrl(); as url) {
+      <p-image
+        [src]="url"
+        [alt]="a.nombreOriginal"
+        [preview]="true"
+        styleClass="block"
+        imageClass="border-round"
+        [imageStyle]="{ 'object-fit': 'cover', width: '2.5rem', height: '2.5rem', cursor: 'zoom-in' }"
+      />
+    } @else if (cargando()) {
+      <div class="flex align-items-center justify-content-center surface-100 border-round w-2rem h-2rem">
+        <p-progress-spinner strokeWidth="6" styleClass="w-1rem h-1rem" ariaLabel="Cargando imagen" />
+      </div>
+    } @else {
+      <!-- No se pudo traer la miniatura: igual se puede descargar. -->
+      <p-chip
+        [label]="a.nombreOriginal"
+        icon="pi pi-image"
+        styleClass="cursor-pointer text-sm"
+        pTooltip="Descargar"
+        tooltipPosition="left"
+        (click)="descargar()"
+      />
+    }
+  } @else {
+    <p-chip
+      [label]="a.nombreOriginal"
+      [icon]="icono()"
+      styleClass="cursor-pointer text-sm"
+      [pTooltip]="'Descargar · ' + tamano()"
+      tooltipPosition="left"
+      (click)="descargar()"
+    />
+  }
+} @else {
+  <!-- Pestaña Archivos: acá sí hace falta la ficha, porque se busca un archivo
+       puntual entre varios y el nombre, el peso y las acciones son el contenido. -->
+  <div class="flex align-items-center gap-2 surface-border border-1 border-round p-2">
+    @if (a.esImagen) {
+      @if (objectUrl(); as url) {
+        <p-image
+          [src]="url"
+          [alt]="a.nombreOriginal"
+          [preview]="true"
+          styleClass="flex-shrink-0"
+          imageClass="border-round"
+          [imageStyle]="{ 'object-fit': 'cover', width: '3rem', height: '3rem', cursor: 'zoom-in' }"
+        />
+      } @else if (cargando()) {
+        <div class="flex align-items-center justify-content-center w-3rem h-3rem flex-shrink-0">
+          <p-progress-spinner strokeWidth="4" styleClass="w-2rem h-2rem" ariaLabel="Cargando imagen" />
+        </div>
+      } @else {
+        <div class="flex align-items-center justify-content-center surface-100 border-round w-3rem h-3rem flex-shrink-0">
+          <i class="pi pi-image text-color-secondary" aria-hidden="true"></i>
+        </div>
+      }
+    } @else {
+      <div class="flex align-items-center justify-content-center surface-100 border-round w-3rem h-3rem flex-shrink-0">
+        <i [class]="icono()" class="text-color-secondary" aria-hidden="true"></i>
+      </div>
+    }
+
+    <div class="flex flex-column flex-grow-1 min-w-0">
+      <span
+        class="text-sm font-medium text-overflow-ellipsis overflow-hidden white-space-nowrap"
+        [pTooltip]="a.nombreOriginal"
+        tooltipPosition="left"
+      >
+        {{ a.nombreOriginal }}
+      </span>
+      <span class="text-xs text-color-secondary">
+        {{ tamano() }}
+        @if (fallo()) {
+          · no se pudo cargar la vista previa
+        }
+      </span>
+    </div>
+
+    <div class="inline-flex align-items-center gap-1 flex-shrink-0">
+      <p-button
+        icon="pi pi-download"
+        [text]="true"
+        [rounded]="true"
+        size="small"
+        severity="secondary"
+        [loading]="descargando()"
+        [ariaLabel]="'Descargar ' + a.nombreOriginal"
+        pTooltip="Descargar"
+        tooltipPosition="left"
+        (onClick)="descargar()"
+      />
+      @if (conEliminar()) {
+        <p-button
+          icon="pi pi-trash"
+          [text]="true"
+          [rounded]="true"
+          size="small"
+          severity="danger"
+          [ariaLabel]="'Eliminar ' + a.nombreOriginal"
+          pTooltip="Eliminar"
+          tooltipPosition="left"
+          (onClick)="eliminar.emit(a)"
+        />
+      }
+    </div>
+  </div>
+}

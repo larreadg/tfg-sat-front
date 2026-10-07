@@ -1,0 +1,162 @@
+<p-dialog
+  [visible]="visible()"
+  (visibleChange)="visible.set($event)"
+  [header]="titulo()"
+  [modal]="true"
+  [draggable]="false"
+  [dismissableMask]="true"
+  [style]="{ width: '52rem' }"
+  [breakpoints]="{ '768px': '95vw' }"
+>
+  @if (errorServidor(); as mensaje) {
+    <p-message severity="error" styleClass="w-full mb-3">{{ mensaje }}</p-message>
+  }
+
+  <form [formGroup]="form" class="grid formgrid" (ngSubmit)="guardar()">
+    <div class="col-12 md:col-5 field">
+      <label for="nombre" class="block text-sm font-medium mb-2">Nombre</label>
+      <input
+        pInputText
+        id="nombre"
+        formControlName="nombre"
+        [readonly]="esRolAdmin()"
+        [maxlength]="largoMaximoNombre"
+        placeholder="ANALISTA"
+        [invalid]="isFieldInvalid('nombre')"
+        [fluid]="true"
+      />
+      @if (isFieldInvalid('nombre')) {
+        <p-message severity="error" size="small" variant="simple">El nombre es obligatorio.</p-message>
+      } @else if (esRolAdmin()) {
+        <small class="text-color-secondary">
+          El rol de administrador no se puede renombrar: lo necesita el sistema para funcionar.
+        </small>
+      }
+    </div>
+
+    <div class="col-12 md:col-7 field">
+      <label for="descripcion" class="block text-sm font-medium mb-2">Descripción</label>
+      <input
+        pInputText
+        id="descripcion"
+        formControlName="descripcion"
+        placeholder="Para qué sirve este rol"
+        [invalid]="isFieldInvalid('descripcion')"
+        [fluid]="true"
+      />
+    </div>
+  </form>
+
+  <div class="flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+    <span class="text-sm font-medium">
+      Permisos
+      <span class="text-color-secondary font-normal">
+        ({{ cantidadSeleccionada() }} de {{ totalPermisos() }})
+      </span>
+    </span>
+    <div class="flex gap-2">
+      <p-button
+        label="Marcar todos"
+        icon="pi pi-check-square"
+        [text]="true"
+        [rounded]="true"
+        size="small"
+        (onClick)="seleccionarTodos()"
+      />
+      <p-button
+        label="Limpiar"
+        icon="pi pi-times"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        size="small"
+        (onClick)="limpiarSeleccion()"
+      />
+    </div>
+  </div>
+
+  <!-- Matriz recurso × acción. `scrollable` para que la lista larga de recursos
+       no estire el diálogo, y `min-width` para que las 5 columnas no se apiñen. -->
+  <p-table
+    [value]="filas()"
+    [scrollable]="true"
+    scrollHeight="22rem"
+    [tableStyle]="{ 'min-width': '34rem' }"
+    styleClass="p-datatable-sm"
+  >
+    <ng-template #header>
+      <tr>
+        <th>Recurso</th>
+        @for (accion of acciones; track accion) {
+          <th class="text-center" style="width: 6rem">
+            <span class="capitalize">{{ accion }}</span>
+          </th>
+        }
+        <th style="width: 4rem"></th>
+      </tr>
+    </ng-template>
+
+    <ng-template #body let-fila>
+      <tr>
+        <td class="font-medium">{{ fila.label }}</td>
+        @for (accion of acciones; track accion) {
+          <td class="text-center">
+            @if (celda(fila, accion); as permiso) {
+              <p-checkbox
+                [binary]="true"
+                [ngModel]="estaSeleccionado(permiso.id)"
+                [ngModelOptions]="{ standalone: true }"
+                (ngModelChange)="alternarPermiso(permiso.id, $event)"
+                [ariaLabel]="permiso.nombre"
+                [pTooltip]="permiso.nombre"
+                tooltipPosition="left"
+              />
+            } @else {
+              <span class="text-color-secondary">—</span>
+            }
+          </td>
+        }
+        <td class="text-center">
+          <p-checkbox
+            [binary]="true"
+            [ngModel]="filaCompleta(fila)"
+            [ngModelOptions]="{ standalone: true }"
+            [indeterminate]="filaParcial(fila)"
+            (ngModelChange)="alternarFila(fila, $event)"
+            [ariaLabel]="'Marcar todas las acciones de ' + fila.label"
+            pTooltip="Toda la fila"
+            tooltipPosition="left"
+          />
+        </td>
+      </tr>
+    </ng-template>
+
+    <ng-template #emptymessage>
+      <tr>
+        <td [attr.colspan]="acciones.length + 2">
+          <div class="flex flex-column align-items-center gap-2 py-4">
+            <span class="text-color-secondary">No se pudo cargar la lista de permisos.</span>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+
+  <ng-template #footer>
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [text]="true"
+      [rounded]="true"
+      [disabled]="guardando()"
+      (onClick)="cancelar()"
+    />
+    <p-button
+      [label]="esEdicion() ? 'Guardar cambios' : 'Crear rol'"
+      icon="pi pi-check"
+      [rounded]="true"
+      [loading]="guardando()"
+      (onClick)="guardar()"
+    />
+  </ng-template>
+</p-dialog>

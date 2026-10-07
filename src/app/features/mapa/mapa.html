@@ -1,0 +1,148 @@
+<div class="flex flex-column gap-4">
+  <div class="flex flex-column gap-2">
+    <h1 class="text-2xl font-semibold m-0">Mapa</h1>
+    <p class="text-color-secondary m-0">
+      Distribución geográfica de los reportes y de los puntos críticos (grupos de reportes cercanos). El color indica
+      el nivel de prioridad; el anillo distingue a los puntos críticos, con su área aproximada.
+    </p>
+  </div>
+
+  <!-- Filtros: cuatro campos de igual peso, acciones al cierre -->
+  <app-filtros-panel [resumen]="filtrosAplicados()">
+    <div class="grid formgrid">
+      <div class="field col-12 sm:col-6 lg:col-3 mb-0">
+        <label for="filtro-rango" class="block text-sm font-medium mb-2">Rango de fechas</label>
+        <p-datepicker
+          inputId="filtro-rango"
+          [(ngModel)]="rango"
+          selectionMode="range"
+          [readonlyInput]="true"
+          dateFormat="dd/mm/yy"
+          [maxDate]="hoy"
+          [showButtonBar]="true"
+          [showClear]="true"
+          placeholder="Desde – Hasta"
+          styleClass="w-full"
+        />
+      </div>
+
+      <div class="field col-12 sm:col-6 lg:col-3 mb-0">
+        <label for="filtro-canal" class="block text-sm font-medium mb-2">Canal</label>
+        <p-select
+          inputId="filtro-canal"
+          [(ngModel)]="canal"
+          [options]="canalOpciones"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Todos"
+          [showClear]="true"
+          styleClass="w-full"
+        />
+      </div>
+
+      <div class="field col-12 sm:col-6 lg:col-3 mb-0">
+        <label for="filtro-estado" class="block text-sm font-medium mb-2">Análisis</label>
+        <p-select
+          inputId="filtro-estado"
+          [(ngModel)]="estado"
+          [options]="estadoOpciones"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Todos"
+          [showClear]="true"
+          styleClass="w-full"
+        />
+      </div>
+
+      <div class="field col-12 sm:col-6 lg:col-3 mb-0">
+        <label for="filtro-nivel" class="block text-sm font-medium mb-2">Nivel</label>
+        <p-select
+          inputId="filtro-nivel"
+          [(ngModel)]="nivel"
+          [options]="nivelOpciones"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Todos"
+          [showClear]="true"
+          styleClass="w-full"
+        />
+      </div>
+
+      <div
+        class="col-12 flex flex-column sm:flex-row justify-content-end align-items-stretch sm:align-items-center gap-2 mt-3"
+      >
+        <p-button
+          label="Limpiar"
+          icon="pi pi-filter-slash"
+          [text]="true"
+          [rounded]="true"
+          severity="secondary"
+          (onClick)="limpiar()"
+        />
+        <p-button label="Aplicar" icon="pi pi-filter" [rounded]="true" (onClick)="aplicar()" />
+      </div>
+    </div>
+  </app-filtros-panel>
+
+  <!-- Leyenda + conteos: dos columnas, y la referencia de símbolos en su propia línea -->
+  <div class="grid">
+    <div class="col-12 lg:col-8 flex flex-column gap-2">
+      <div class="flex align-items-center flex-wrap gap-2">
+        <span class="text-sm font-medium text-color-secondary">Nivel:</span>
+        @for (nivel of nivelesLeyenda; track nivel) {
+          <app-nivel-tag [nivel]="nivel" />
+        }
+      </div>
+      @if (puedeVerZonas()) {
+        <div class="flex align-items-center gap-2 flex-wrap">
+          <p-checkbox
+            inputId="ver-zonas"
+            [binary]="true"
+            [ngModel]="mostrarZonas()"
+            (onChange)="alternarZonas($event)"
+          />
+          <label for="ver-zonas" class="text-sm cursor-pointer">Mostrar zonas de riesgo</label>
+        </div>
+      }
+    </div>
+    @if (!loading() && !error()) {
+      <div class="col-12 lg:col-4 flex align-items-start lg:justify-content-end">
+        <span class="text-sm text-color-secondary">
+          {{ cantidadReportes() }} reportes · {{ cantidadPuntosCriticos() }} puntos críticos
+        </span>
+      </div>
+    }
+  </div>
+
+  <!-- Mapa -->
+  @if (loading()) {
+    <p-skeleton height="70vh" borderRadius="8px" />
+  } @else if (error()) {
+    <p-card>
+      <div class="flex flex-column align-items-center gap-3 py-6 text-center">
+        <i class="pi pi-exclamation-triangle text-3xl text-color-secondary"></i>
+        <div class="flex flex-column gap-1">
+          <span class="font-medium">No se pudo cargar el mapa</span>
+          <span class="text-sm text-color-secondary">Revisá tu conexión e intentá nuevamente.</span>
+        </div>
+        <p-button label="Reintentar" icon="pi pi-refresh" [rounded]="true" (onClick)="reintentar()" />
+      </div>
+    </p-card>
+  } @else {
+    @if (puntos().length === 0) {
+      <div class="flex align-items-center gap-2 text-sm text-color-secondary">
+        <i class="pi pi-info-circle"></i>
+        No hay reportes ni puntos críticos para estos filtros.
+        @if (cantidadZonas() > 0) {
+          El mapa muestra las zonas de riesgo configuradas.
+        }
+      </div>
+    }
+    <app-leaflet-map
+      [puntos]="puntos()"
+      [poligonos]="poligonosZonas()"
+      altura="70vh"
+      etiquetaAccesible="Mapa de reportes, puntos críticos y zonas de riesgo"
+    />
+  }
+</div>

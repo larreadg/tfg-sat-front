@@ -1,0 +1,60 @@
+/*
+ * El formulario del motor es largo (cuatro bloques con tablas adentro) y el
+ * guardar tiene que quedar siempre a mano. PrimeFlex no tiene clase para
+ * `position: sticky`, así que es el único caso que justifica CSS propio acá.
+ * El fondo se toma del tema para que el contenido no se transparente al pasar
+ * por debajo.
+ */
+:host ::ng-deep .barra-acciones {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--p-content-background);
+  border-color: var(--p-content-border-color);
+}
+
+/*
+ * Barra de encabezado de cada factor dentro de "Puntajes y reglas". Separa un
+ * factor del siguiente sin apilar tarjetas: es una superficie, no una caja con
+ * borde. `surface-100` de PrimeFlex no alcanza porque necesita también el borde
+ * inferior que la ata al contenido.
+ */
+.barra-factor {
+  // Los tonos `--p-surface-*` no se invierten con el esquema (100 es claro
+  // siempre), así que el escalón sobre la superficie del contenido se elige por
+  // esquema, igual que hacen las utilidades de PrimeFlex.
+  background: light-dark(var(--p-surface-100), var(--p-surface-800));
+  border-bottom: 1px solid var(--p-content-border-color);
+}
+
+/*
+ * El corte de cada tramo de F1 es un número corto y va embebido en la frase
+ * "de N a [x]": a ancho completo rompía la lectura de la línea.
+ */
+:host ::ng-deep .corte-tramo input {
+  width: 4.5rem;
+  text-align: center;
+}
+
+/*
+ * El peso es un número corto (1, 1,5, 2) y vive en el encabezado de la tarjeta,
+ * al lado del botón de quitar. Sin acotarlo toma el ancho por defecto del
+ * `p-inputnumber` y empuja el título de la pregunta.
+ *
+ * Es una clase propia pasada por `styleClass`, no una clase interna de PrimeNG.
+ */
+:host ::ng-deep .peso-regla input {
+  width: 4.5rem;
+  text-align: center;
+}
+
+/*
+ * El select de agregación vive en la barra del factor, donde el ancho es escaso,
+ * pero su opción más larga ("Promedia las preguntas respondidas") no entra en el
+ * ancho por defecto: el panel abierto desbordaba y generaba scroll horizontal.
+ * Se fija el ancho del disparador, que es del que el panel hereda su medida.
+ */
+:host ::ng-deep .modo-factor {
+  width: 16rem;
+  max-width: 100%;
+}

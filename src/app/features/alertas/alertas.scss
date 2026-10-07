@@ -1,0 +1,50 @@
+// Estilos del tablero Kanban. Todo lo que PrimeFlex cubre (grid, flex, padding,
+// bordes, superficies, overflow) está en el template; acá queda solo lo que no
+// tiene utilidad equivalente: la altura de la columna, y el realce de las zonas
+// de soltado durante el arrastre (color-mix sobre el primary del tema).
+
+$kanban-transition: 150ms cubic-bezier(0.165, 0.84, 0.44, 1);
+
+.kanban-columna {
+  // El realce del destino se dibuja con `outline` y no con `border` para que
+  // aparecer y desaparecer no corra el contenido de la columna ni un píxel.
+  outline: 2px dashed transparent;
+  outline-offset: -2px;
+  transition:
+    outline-color $kanban-transition,
+    background-color $kanban-transition,
+    opacity $kanban-transition;
+}
+
+// Hay un arrastre en curso y esta columna es una transición válida: se insinúa
+// el borde punteado. Así la máquina de estados se lee sin tener que probarla.
+.kanban-columna--destino {
+  outline-color: var(--p-primary-color);
+}
+
+// El puntero está encima de un destino válido: se confirma con fondo teñido.
+// `color-mix` sobre el primary del tema funciona igual en claro y en oscuro
+// (un `--p-primary-50` fijo se vería lavado en el tema oscuro).
+.kanban-columna--sobre {
+  outline-style: solid;
+  background-color: color-mix(in srgb, var(--p-primary-color) 10%, transparent);
+}
+
+// Columna a la que la tarjeta levantada NO puede ir: se apaga para que el
+// destino válido quede como la única opción visible.
+.kanban-columna--inhabilitada {
+  opacity: 0.4;
+}
+
+.kanban-columna__cuerpo {
+  // Cada columna scrollea por su cuenta: una columna con 50 alertas no puede
+  // estirar el tablero y empujar a las otras fuera de la pantalla.
+  max-height: calc(100vh - 24rem);
+  min-height: 12rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kanban-columna {
+    transition: none;
+  }
+}

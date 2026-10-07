@@ -1,0 +1,92 @@
+<p-confirmdialog [style]="{ width: '28rem' }" />
+
+<div class="flex flex-column gap-3">
+  @if (puedeEscribir()) {
+    <!-- `customUpload` para que el POST salga por HttpClient y pase por el
+         interceptor (el upload nativo de p-fileupload haría su propio XHR, sin
+         token ni refresh). -->
+    <p-fileupload
+      #uploader
+      name="archivos"
+      [customUpload]="true"
+      [multiple]="true"
+      [fileLimit]="maxCantidad"
+      [maxFileSize]="maxBytes"
+      [accept]="accept"
+      [showCancelButton]="false"
+      chooseIcon="pi pi-paperclip"
+      chooseLabel="Elegir archivos"
+      uploadIcon="pi pi-upload"
+      uploadLabel="Subir"
+      [chooseButtonProps]="{ rounded: true, outlined: true, size: 'small' }"
+      [uploadButtonProps]="{ rounded: true, size: 'small', loading: subiendo() }"
+      (uploadHandler)="subir($event)"
+    >
+      <ng-template #empty>
+        <div class="flex flex-column align-items-center gap-2 py-3 text-center">
+          <i class="pi pi-cloud-upload text-2xl text-color-secondary" aria-hidden="true"></i>
+          <span class="text-sm text-color-secondary">
+            Arrastrá acá los archivos de la alerta: hasta {{ maxCantidad }} de 10 MB, en imagen, PDF, Word o Excel.
+          </span>
+        </div>
+      </ng-template>
+    </p-fileupload>
+  }
+
+  @if (cargando()) {
+    <div class="grid">
+      @for (s of skeletons; track $index) {
+        <div class="col-12 md:col-6"><p-skeleton height="4.5rem" borderRadius="8px" /></div>
+      }
+    </div>
+  } @else if (error()) {
+    <div class="flex flex-column align-items-center gap-3 py-5 text-center">
+      <i class="pi pi-exclamation-triangle text-2xl text-color-secondary" aria-hidden="true"></i>
+      <span class="text-sm text-color-secondary">No se pudieron cargar los archivos.</span>
+      <p-button label="Reintentar" icon="pi pi-refresh" [text]="true" [rounded]="true" (onClick)="reintentar()" />
+    </div>
+  } @else {
+    @if (adjuntos().length > 0) {
+      <div class="flex align-items-center gap-2 flex-wrap text-sm text-color-secondary">
+        <span>
+          <span class="font-semibold text-color">{{ adjuntos().length }}</span>
+          {{ adjuntos().length === 1 ? 'archivo' : 'archivos' }}
+        </span>
+        @if (deComentario() > 0) {
+          <span aria-hidden="true">·</span>
+          <span>{{ deComentario() }} adjuntados en un comentario del seguimiento</span>
+        }
+      </div>
+    }
+
+    <div class="grid">
+      @for (a of adjuntos(); track a.id) {
+        <div class="col-12 md:col-6">
+          <div class="flex flex-column gap-1">
+            <app-adjunto-vista
+              [adjunto]="a"
+              [conEliminar]="puedeEscribir() && a.comentarioId === null"
+              (eliminar)="confirmarEliminar($event)"
+            />
+            <span class="text-xs text-color-secondary pl-2">
+              {{ a.autor.nombreCompleto }}
+              @if (a.comentarioId !== null) {
+                · del seguimiento
+              }
+            </span>
+          </div>
+        </div>
+      } @empty {
+        <div class="col-12">
+          <div class="flex flex-column align-items-center gap-2 py-5 text-center">
+            <i class="pi pi-folder-open text-2xl text-color-secondary" aria-hidden="true"></i>
+            <span class="font-medium">Sin archivos todavía</span>
+            <span class="text-sm text-color-secondary">
+              Acá se juntan las actas, fotos y planillas de la alerta, incluidas las que viajan en un comentario.
+            </span>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

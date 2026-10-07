@@ -1,0 +1,240 @@
+<p-confirmdialog />
+
+<div class="flex flex-column gap-4">
+  <div class="flex flex-column gap-2">
+    <h1 class="text-2xl font-semibold m-0">Zonas de riesgo</h1>
+    <p class="text-color-secondary m-0">
+      Zonas dibujadas a mano sobre el mapa, cada una con su criticidad. Son la fuente del factor <strong>F5</strong>
+      del motor: un reporte que cae dentro de una zona recibe el puntaje de esa zona.
+    </p>
+  </div>
+
+  <p-card>
+  <div class="flex flex-column gap-4">
+    <div class="flex flex-wrap align-items-start justify-content-between gap-3">
+      <!-- `flex-1` toma todo el ancho que dejan las acciones; `min-w-min` evita
+           que se aplaste en pantallas angostas (ahí baja a su propia línea). -->
+      <div class="flex flex-column gap-2 flex-1 min-w-min">
+        <p class="text-color-secondary m-0">
+          Si un reporte cae dentro de <strong>varias zonas superpuestas</strong>, gana la de criticidad más alta:
+          agregar una zona al mapa nunca le baja el puntaje a un reporte que ya estaba cubierto.
+        </p>
+      </div>
+
+      <div class="flex flex-wrap align-items-center gap-2">
+        <p-tag
+          [value]="activas() + ' zona(s) activa(s)'"
+          [severity]="activas() > 0 ? 'success' : 'warn'"
+          [rounded]="true"
+        />
+        @if (puedeCrear) {
+          @if (dibujando()) {
+            <p-button
+              label="Cancelar dibujo"
+              icon="pi pi-times"
+              severity="secondary"
+              [rounded]="true"
+              [outlined]="true"
+              (onClick)="cancelarDibujo()"
+            />
+          } @else {
+            <p-button
+              label="Dibujar zona"
+              icon="pi pi-pencil"
+              [rounded]="true"
+              pTooltip="Hacé clic en el mapa para ir marcando los vértices, y clic en el primero para cerrar el polígono."
+              tooltipPosition="left"
+              (onClick)="iniciarDibujo()"
+            />
+          }
+        }
+      </div>
+    </div>
+
+    @if (activas() === 0) {
+      <p-message severity="info" styleClass="w-full">
+        <span class="text-sm">
+          Sin ninguna zona activa, F5 no participa del cálculo: su peso se reparte entre los demás factores. En cuanto
+          haya una, los reportes que caigan fuera de todas pasan a valer 0 en F5.
+        </span>
+      </p-message>
+    }
+
+    @if (puedeCrear || puedeEditar) {
+      <p-message severity="secondary" styleClass="w-full">
+        <span class="text-sm">
+          Para crear una zona: <strong>Dibujar zona</strong>, después un clic en el mapa por cada vértice, y clic sobre
+          el primero para cerrar el polígono. En la esquina del mapa están además el rectángulo, el modo edición (para
+          arrastrar vértices de una zona que ya existe, que se guarda sola) y el modo mover. Para cambiarle el nombre o
+          la criticidad a una zona, hacé clic sobre ella o usá la tabla de abajo.
+        </span>
+      </p-message>
+    }
+
+    <!-- Leaflet maneja su propio DOM: este div es el lienzo, no un componente PrimeNG. -->
+    <div
+      #contenedor
+      class="w-full border-round-lg overflow-hidden surface-border border-1"
+      style="height: 480px"
+      role="application"
+      aria-label="Mapa para dibujar zonas de riesgo"
+    ></div>
+
+    <p-table
+      [value]="zonas()"
+      [loading]="cargando()"
+      styleClass="p-datatable-sm"
+      [paginator]="zonas().length > 10"
+      [rows]="10"
+    >
+      <ng-template #header>
+        <tr>
+          <th>Zona</th>
+          <th style="width: 10rem">Criticidad</th>
+          <th style="width: 6rem" class="text-center">F5</th>
+          <th style="width: 7rem" class="text-center">Estado</th>
+          <th style="width: 9rem"></th>
+        </tr>
+      </ng-template>
+
+      <ng-template #body let-zona>
+        <tr>
+          <td>
+            <div class="flex flex-column gap-1">
+              <span class="font-medium text-color">{{ zona.nombre }}</span>
+              @if (zona.descripcion) {
+                <small class="text-color-secondary">{{ zona.descripcion }}</small>
+              }
+            </div>
+          </td>
+          <td>{{ etiquetaCriticidad(zona.criticidad) }}</td>
+          <td class="text-center font-medium">{{ zona.puntajeF5 }}</td>
+          <td class="text-center">
+            <p-tag
+              [value]="zona.activo ? 'Activa' : 'Inactiva'"
+              [severity]="zona.activo ? 'success' : 'secondary'"
+              [rounded]="true"
+            />
+          </td>
+          <td class="text-right">
+            <p-button
+              icon="pi pi-map-marker"
+              [text]="true"
+              [rounded]="true"
+              size="small"
+              severity="secondary"
+              ariaLabel="Centrar el mapa en esta zona"
+              pTooltip="Centrar el mapa acá"
+              tooltipPosition="left"
+              (onClick)="enfocar(zona)"
+            />
+            @if (puedeEditar) {
+              <p-button
+                icon="pi pi-pencil"
+                [text]="true"
+                [rounded]="true"
+                size="small"
+                ariaLabel="Editar la zona"
+                pTooltip="Editar nombre y criticidad"
+                tooltipPosition="left"
+                (onClick)="abrirDialogo(zona)"
+              />
+            }
+            @if (puedeEliminar) {
+              <p-button
+                icon="pi pi-trash"
+                [text]="true"
+                [rounded]="true"
+                size="small"
+                severity="danger"
+                ariaLabel="Eliminar la zona"
+                pTooltip="Eliminar la zona"
+                tooltipPosition="left"
+                (onClick)="confirmarEliminar(zona)"
+              />
+            }
+          </td>
+        </tr>
+      </ng-template>
+
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="5" class="text-color-secondary">
+            Todavía no hay zonas de riesgo. Dibujá la primera sobre el mapa.
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+  </p-card>
+</div>
+
+<p-dialog
+  [visible]="dialogoAbierto()"
+  (visibleChange)="$event ? null : cerrarDialogo()"
+  [header]="tituloDialogo()"
+  [modal]="true"
+  [draggable]="false"
+  [dismissableMask]="true"
+  [style]="{ width: '32rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <div class="flex flex-column gap-3" [formGroup]="form">
+    <div class="field m-0">
+      <label for="zona-nombre" class="block text-sm font-medium mb-2">Nombre</label>
+      <input
+        pInputText
+        id="zona-nombre"
+        formControlName="nombre"
+        placeholder="Ej.: Barrio San Miguel – red vieja"
+        [fluid]="true"
+      />
+    </div>
+
+    <div class="field m-0">
+      <label for="zona-criticidad" class="block text-sm font-medium mb-2">Criticidad</label>
+      <p-select
+        inputId="zona-criticidad"
+        formControlName="criticidad"
+        [options]="criticidades"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        [fluid]="true"
+      />
+      <small class="text-color-secondary">
+        Define el puntaje que esta zona le aporta a F5 a los reportes que caigan adentro.
+      </small>
+    </div>
+
+    <div class="field m-0">
+      <label for="zona-descripcion" class="block text-sm font-medium mb-2">Descripción (opcional)</label>
+      <textarea
+        pTextarea
+        id="zona-descripcion"
+        formControlName="descripcion"
+        rows="3"
+        placeholder="Por qué esta zona tiene esta criticidad"
+        [fluid]="true"
+      ></textarea>
+    </div>
+
+    <div class="flex align-items-center gap-2">
+      <p-toggleswitch inputId="zona-activo" formControlName="activo" />
+      <label for="zona-activo" class="text-sm">Activa</label>
+      <small class="text-color-secondary">Una zona inactiva queda en el mapa pero no cuenta para F5.</small>
+    </div>
+  </div>
+
+  <ng-template #footer>
+    <p-button label="Cancelar" severity="secondary" [text]="true" [rounded]="true" (onClick)="cerrarDialogo()" />
+    <p-button
+      label="Guardar"
+      icon="pi pi-check"
+      [rounded]="true"
+      [loading]="guardando()"
+      [disabled]="form.invalid"
+      (onClick)="guardar()"
+    />
+  </ng-template>
+</p-dialog>

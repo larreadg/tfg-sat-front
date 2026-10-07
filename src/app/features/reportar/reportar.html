@@ -1,0 +1,307 @@
+<div class="min-h-screen flex align-items-center justify-content-center surface-ground p-3 md:p-6">
+  <div class="w-full" style="max-width: 34rem">
+    <div class="flex flex-column align-items-center gap-2 text-center mb-4">
+      <div class="flex align-items-center gap-2">
+        <img src="logo1.webp" [alt]="appName" style="width: 2.5rem; height: auto" />
+        <span class="text-xl font-bold">{{ appName }}</span>
+      </div>
+      <h1 class="text-2xl font-semibold m-0">Reportar agua contaminada</h1>
+      <p class="text-color-secondary m-0" style="max-width: 32rem">
+        Seguí estos pasos para enviarnos tu reporte. Primero necesitamos validar tu identidad con tu número de
+        teléfono.
+      </p>
+    </div>
+
+    @if (ubicacionEstado() !== 'concedida') {
+      <p-card styleClass="shadow-2">
+        <div class="flex flex-column align-items-center gap-3 py-5 text-center">
+          <i class="pi pi-map-marker text-4xl text-color-secondary"></i>
+          <h3 class="m-0">Necesitamos tu ubicación</h3>
+          <p class="text-color-secondary m-0" style="max-width: 28rem">
+            Para continuar con el reporte es obligatorio permitir que el sitio acceda a tu ubicación. Esto le
+            permite al analista identificar dónde podría estar el agua contaminada.
+          </p>
+          @if (ubicacionEstado() === 'error') {
+            <p-message severity="error" size="small" variant="simple">{{ ubicacionErrorMsg() }}</p-message>
+          }
+          <p-button
+            [label]="ubicacionEstado() === 'error' ? 'Reintentar' : 'Permitir ubicación'"
+            icon="pi pi-map-marker"
+            [rounded]="true"
+            [loading]="ubicacionEstado() === 'solicitando'"
+            (onClick)="solicitarUbicacion()"
+          />
+        </div>
+      </p-card>
+    } @else {
+      <p-card styleClass="shadow-2">
+        <p-stepper [(value)]="activeStep" [linear]="true">
+          <!-- Paso 1: Validar identidad -->
+          <p-step-item [value]="1">
+            <p-step>Validar identidad</p-step>
+            <p-step-panel>
+              <ng-template #content let-activateCallback="activateCallback">
+                <div class="mx-auto" style="max-width: 24rem">
+                  @if (identidadStage() === 'telefono') {
+                    <form [formGroup]="telefonoForm" (ngSubmit)="solicitarCodigo()" class="grid pt-4">
+                      <div class="col-12 flex flex-column gap-2">
+                        <label for="telefono">Número de teléfono</label>
+                        <input
+                          pInputText
+                          pSize="small"
+                          id="telefono"
+                          type="tel"
+                          inputmode="numeric"
+                          maxlength="10"
+                          formControlName="telefono"
+                          placeholder="09XXXXXXXX"
+                          [invalid]="isFieldInvalid(telefonoForm, 'telefono')"
+                          autocomplete="tel"
+                          [fluid]="true"
+                        />
+                        @if (isFieldInvalid(telefonoForm, 'telefono')) {
+                          <p-message severity="error" size="small" variant="simple"
+                            >Ingresá un número válido con el formato 09XXXXXXXX.</p-message
+                          >
+                        }
+                      </div>
+
+                      <div class="col-12 flex flex-column gap-2">
+                        <!-- Anti-bot: invisible hasta que Cloudflare pida interacción al enviar -->
+                        <div class="flex justify-content-center">
+                          <app-turnstile
+                            #refTurnstileTelefono
+                            [(token)]="turnstileTelefono"
+                            accion="validar-telefono"
+                          />
+                        </div>
+                      </div>
+
+                      <div class="col-12 pt-2">
+                        <p-button
+                          label="Enviar código"
+                          icon="pi pi-arrow-right"
+                          iconPos="right"
+                          [rounded]="true"
+                          [fluid]="true"
+                          type="submit"
+                          [loading]="loading() || verificando()"
+                        />
+                      </div>
+                    </form>
+                  } @else {
+                    <form [formGroup]="codigoForm" (ngSubmit)="verificarCodigo(activateCallback)" class="grid pt-4">
+                      <div class="col-12 flex flex-column align-items-center gap-2 text-center">
+                        <p class="text-color-secondary m-0">Ingresá el código de 4 dígitos que enviamos por SMS a tu teléfono.</p>
+                        <p-inputotp
+                          formControlName="codigo"
+                          [length]="4"
+                          size="small"
+                          [integerOnly]="true"
+                          [invalid]="isFieldInvalid(codigoForm, 'codigo')"
+                        />
+                        @if (isFieldInvalid(codigoForm, 'codigo')) {
+                          <p-message severity="error" size="small" variant="simple">Ingresá el código de 4 dígitos.</p-message>
+                        }
+                      </div>
+
+                      <div class="col-12 pt-2">
+                        <p-button label="Verificar" type="submit" [loading]="loading()" [rounded]="true" [fluid]="true" />
+                      </div>
+
+                      <div class="col-12 flex flex-column">
+                        <p-button
+                          type="button"
+                          [label]="resendLabel()"
+                          [text]="true"
+                          [rounded]="true"
+                          [fluid]="true"
+                          [disabled]="resendCooldown() > 0"
+                          (onClick)="reenviarCodigo()"
+                        />
+                        <p-button
+                          type="button"
+                          label="Cambiar de teléfono"
+                          [link]="true"
+                          [rounded]="true"
+                          [fluid]="true"
+                          (onClick)="volverATelefono()"
+                        />
+                      </div>
+                    </form>
+                  }
+                </div>
+              </ng-template>
+            </p-step-panel>
+          </p-step-item>
+
+          <!-- Paso 2: Completar encuesta -->
+          <p-step-item [value]="2">
+            <p-step [disabled]="!identidadVerificada()">Completar encuesta</p-step>
+            <p-step-panel>
+              <ng-template #content let-activateCallback="activateCallback">
+                @if (encuestaLoading()) {
+                  <div class="flex justify-content-center py-5">
+                    <i class="pi pi-spin pi-spinner text-2xl text-color-secondary"></i>
+                  </div>
+                } @else if (encuestaError()) {
+                  <div class="flex flex-column align-items-center gap-3 py-5 text-center">
+                    <i class="pi pi-exclamation-triangle text-color-secondary" style="font-size: 2rem"></i>
+                    <span class="text-color-secondary">{{ encuestaError() }}</span>
+                  </div>
+                } @else if (encuesta(); as datosEncuesta) {
+                  <div class="grid pt-4">
+                    <div class="col-12">
+                      <h3 class="text-lg font-semibold m-0">{{ datosEncuesta.nombre }}</h3>
+                      <p class="text-color-secondary m-0">{{ datosEncuesta.descripcion }}</p>
+                    </div>
+
+                    @for (pregunta of datosEncuesta.preguntas; track pregunta.id) {
+                      <div class="col-12 flex flex-column gap-3">
+                        <label class="font-medium">{{ pregunta.texto }}</label>
+
+                        @if (pregunta.tipo === 'ELECCION_UNICA') {
+                          <div class="flex flex-column gap-2">
+                            @for (opcion of pregunta.opciones; track opcion.id) {
+                              <div class="flex align-items-center gap-2">
+                                <p-radiobutton
+                                  [inputId]="'pregunta-' + pregunta.id + '-opcion-' + opcion.id"
+                                  [name]="'pregunta-' + pregunta.id"
+                                  [value]="opcion.id"
+                                  [ngModel]="respuestaUnica(pregunta.id)"
+                                  (ngModelChange)="setRespuestaUnica(pregunta.id, $event)"
+                                />
+                                <label [for]="'pregunta-' + pregunta.id + '-opcion-' + opcion.id">{{ opcion.texto }}</label>
+                              </div>
+                            }
+                          </div>
+                        } @else if (pregunta.tipo === 'ELECCION_MULTIPLE') {
+                          <div class="flex flex-column gap-2">
+                            @for (opcion of pregunta.opciones; track opcion.id) {
+                              <div class="flex align-items-center gap-2">
+                                <p-checkbox
+                                  [inputId]="'pregunta-' + pregunta.id + '-opcion-' + opcion.id"
+                                  [binary]="true"
+                                  [ngModel]="esOpcionMultipleSeleccionada(pregunta.id, opcion.id)"
+                                  (ngModelChange)="alternarOpcionMultiple(pregunta.id, opcion.id)"
+                                />
+                                <label [for]="'pregunta-' + pregunta.id + '-opcion-' + opcion.id">{{ opcion.texto }}</label>
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <app-foto-selector
+                            [(fotos)]="fotos"
+                            [minimo]="fotosMin()"
+                            [maximo]="fotosMax()"
+                          />
+                          <p class="m-0 text-sm text-color-secondary">
+                            @if (fotosMin() === 1) {
+                              Hace falta al menos una foto del agua (podés sumar hasta {{ fotosMax() }}).
+                            } @else {
+                              Hacen falta al menos {{ fotosMin() }} fotos del agua (podés sumar hasta {{ fotosMax() }}).
+                            }
+                          </p>
+                          @if (intentoAvanzarEncuesta() && faltanFotos()) {
+                            <p-message severity="error" size="small" variant="simple">
+                              @if (fotosMin() === 1) {
+                                Sin al menos una foto no podemos analizar el reporte.
+                              } @else {
+                                Faltan fotos: se necesitan al menos {{ fotosMin() }}.
+                              }
+                            </p-message>
+                          }
+                        }
+
+                        @if (intentoAvanzarEncuesta() && pregunta.tipo !== 'FOTO' && !preguntaRespondida(pregunta)) {
+                          <p-message severity="error" size="small" variant="simple">Esta pregunta es obligatoria.</p-message>
+                        }
+                      </div>
+                    }
+
+                    <div class="col-12 pt-2">
+                      <p-button
+                        label="Siguiente"
+                        icon="pi pi-arrow-right"
+                        iconPos="right"
+                        [rounded]="true"
+                        [fluid]="true"
+                        (onClick)="avanzarEncuesta(activateCallback)"
+                      />
+                    </div>
+                  </div>
+                }
+              </ng-template>
+            </p-step-panel>
+          </p-step-item>
+
+          <!-- Paso 3: Enviar reporte -->
+          <p-step-item [value]="3">
+            <p-step [disabled]="!identidadVerificada()">Enviar reporte</p-step>
+            <p-step-panel>
+              <ng-template #content let-activateCallback="activateCallback">
+                @if (reporteEnviado()) {
+                  <div class="flex flex-column align-items-center gap-3 py-5 text-center">
+                    <i class="pi pi-check-circle text-4xl" style="color: var(--p-primary-color)"></i>
+                    <h3 class="m-0">¡Gracias! Tu reporte fue enviado.</h3>
+                    <p class="text-color-secondary m-0" style="max-width: 28rem">
+                      Un analista va a revisar tu reporte. Si detectamos algo importante, te vamos a contactar por
+                      teléfono.
+                    </p>
+                    <p-button
+                      label="Enviar otro reporte"
+                      [rounded]="true"
+                      [text]="true"
+                      (onClick)="reiniciarFlujo(activateCallback)"
+                    />
+                  </div>
+                } @else {
+                  <div class="grid pt-4">
+                    <div class="col-12">
+                      <p class="text-color-secondary m-0">
+                        Revisá que todo esté correcto y enviá tu reporte. Un analista lo va a revisar a la brevedad.
+                      </p>
+                    </div>
+
+                    <div class="col-12 flex flex-column gap-2">
+                      <span class="font-medium">Fotos adjuntas</span>
+                      <span class="text-color-secondary">{{ fotos().length }} foto(s) seleccionada(s)</span>
+                    </div>
+
+                    <!-- Segundo gate anti-bot: corre al tocar "Enviar reporte" -->
+                    <div class="col-12 flex justify-content-center">
+                      <app-turnstile #refTurnstileEnvio [(token)]="turnstileEnvio" accion="enviar-reporte" />
+                    </div>
+
+                    <div class="col-12 pt-2">
+                      <p-button
+                        label="Enviar reporte"
+                        icon="pi pi-send"
+                        iconPos="right"
+                        [rounded]="true"
+                        [fluid]="true"
+                        [loading]="loading() || verificando()"
+                        (onClick)="enviarReporte(activateCallback)"
+                      />
+                    </div>
+
+                    <div class="col-12 flex justify-content-center">
+                      <p-button
+                        label="Atrás"
+                        icon="pi pi-arrow-left"
+                        [rounded]="true"
+                        [link]="true"
+                        [disabled]="loading()"
+                        (onClick)="activateCallback(2)"
+                      />
+                    </div>
+                  </div>
+                }
+              </ng-template>
+            </p-step-panel>
+          </p-step-item>
+        </p-stepper>
+      </p-card>
+    }
+  </div>
+</div>

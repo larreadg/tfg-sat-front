@@ -1,0 +1,449 @@
+<p-dialog
+  [visible]="visible()"
+  (visibleChange)="visible.set($event)"
+  [modal]="true"
+  [draggable]="false"
+  [dismissableMask]="true"
+  [header]="esEdicion() ? 'Editar regla' : 'Nueva regla'"
+  [style]="{ width: '46rem' }"
+  [breakpoints]="{ '960px': '95vw' }"
+>
+  <form [formGroup]="form" class="grid formgrid">
+    <!-- Nombre -->
+    <div class="col-12 field">
+      <label for="nombre" class="block text-sm font-medium mb-2">Nombre de la regla</label>
+      <input
+        pInputText
+        id="nombre"
+        formControlName="nombre"
+        placeholder="Alerta crítica a la guardia"
+        autocomplete="off"
+        [invalid]="isFieldInvalid('nombre')"
+        [fluid]="true"
+      />
+      @if (isFieldInvalid('nombre')) {
+        <p-message severity="error" size="small" variant="simple">Ponele un nombre.</p-message>
+      } @else {
+        <small class="text-color-secondary">
+          Es el nombre con el que vas a reconocer esta regla en el listado: que diga qué hace.
+        </small>
+      }
+    </div>
+
+    <!-- ===== CUÁNDO: evento + condiciones ===== -->
+    <div class="col-12">
+      <div class="flex align-items-center gap-2 mb-2">
+        <i class="pi pi-bolt text-color-secondary"></i>
+        <span class="text-sm font-medium">Cuándo se dispara</span>
+      </div>
+    </div>
+
+    <div class="col-12 field">
+      <label for="evento" class="block text-sm font-medium mb-2">Evento</label>
+      <p-select
+        inputId="evento"
+        formControlName="evento"
+        [options]="catalogo().eventos"
+        optionLabel="label"
+        optionValue="valor"
+        [fluid]="true"
+      />
+      @if (definicionEvento(); as def) {
+        <small class="text-color-secondary block mt-1">{{ def.descripcion }}</small>
+      }
+    </div>
+
+    <!-- Condiciones: se muestran solo las que el catálogo declara para este evento -->
+    @if (muestraCondicion('nivelMinimo')) {
+      <div class="col-12 md:col-6 field">
+        <label for="nivelMinimo" class="block text-sm font-medium mb-2">Solo si el nivel es</label>
+        <p-select
+          inputId="nivelMinimo"
+          formControlName="nivelMinimo"
+          [options]="nivelOpciones()"
+          optionLabel="label"
+          optionValue="value"
+          [fluid]="true"
+        />
+        <small class="text-color-secondary">
+          Las etiquetas describen la <strong>prioridad</strong> de atención, no el estado del agua.
+        </small>
+      </div>
+    }
+
+    @if (muestraCondicion('estadosDestino')) {
+      <div class="col-12 md:col-6 field">
+        <label for="estadosDestino" class="block text-sm font-medium mb-2">Solo si pasa a</label>
+        <p-multiselect
+          inputId="estadosDestino"
+          formControlName="estadosDestino"
+          [options]="estadoOpciones()"
+          optionLabel="label"
+          optionValue="value"
+          display="chip"
+          placeholder="Cualquier estado"
+          [fluid]="true"
+        />
+        <small class="text-color-secondary">Sin selección, dispara con cualquier cambio de estado.</small>
+      </div>
+    }
+
+    <!-- ===== QUÉ HACE: acción + sus campos ===== -->
+    <div class="col-12">
+      <div class="flex align-items-center gap-2 mb-2 mt-2">
+        <i class="pi pi-send text-color-secondary"></i>
+        <span class="text-sm font-medium">Qué hace</span>
+      </div>
+    </div>
+
+    <div class="col-12 field">
+      <label for="accion" class="block text-sm font-medium mb-2">Acción</label>
+      <p-select
+        inputId="accion"
+        formControlName="accion"
+        [options]="catalogo().acciones"
+        optionLabel="label"
+        optionValue="valor"
+        [fluid]="true"
+      />
+      @if (definicionAccion(); as def) {
+        <small class="text-color-secondary">{{ def.descripcion }}</small>
+      }
+    </div>
+
+    @if (muestraCampo('destinatarios')) {
+      <div class="col-12 field">
+        <label for="destinatarios" class="block text-sm font-medium mb-2">
+          Destinatarios <span class="text-color-secondary font-normal">(separados por coma)</span>
+        </label>
+        <input
+          pInputText
+          id="destinatarios"
+          formControlName="destinatarios"
+          placeholder="guardia@dominio.com, coordinacion@dominio.com"
+          autocomplete="off"
+          [invalid]="isFieldInvalid('destinatarios')"
+          [fluid]="true"
+        />
+        @if (isFieldInvalid('destinatarios')) {
+          <p-message severity="error" size="small" variant="simple">
+            Una regla que manda correo necesita al menos un destinatario.
+          </p-message>
+        }
+      </div>
+    }
+
+    @if (muestraCampo('asunto')) {
+      <div class="col-12 field">
+        <label for="asunto" class="block text-sm font-medium mb-2">
+          Asunto <span class="text-color-secondary font-normal">(vacío = uno automático)</span>
+        </label>
+        <input
+          pInputText
+          id="asunto"
+          formControlName="asunto"
+          placeholder="[AGUARD] {{ '{{nivelEtiqueta}}' }} en {{ '{{ubicacion}}' }}"
+          autocomplete="off"
+          [fluid]="true"
+        />
+        <!-- Las variables salen del catálogo: cambian con el evento elegido. -->
+        @if (variables().length > 0) {
+          <div class="flex flex-column gap-2 mt-2">
+            <small class="text-color-secondary">Tocá una variable para insertarla en el asunto:</small>
+            <div class="flex flex-wrap gap-1">
+              @for (variable of variables(); track variable.clave) {
+                <p-chip
+                  [label]="'{{' + variable.clave + '}}'"
+                  styleClass="cursor-pointer text-sm"
+                  [pTooltip]="variable.descripcion + ' — ej: ' + variable.ejemplo"
+                  tooltipPosition="left"
+                  (click)="insertarVariable(variable.clave)"
+                />
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Cuerpo del correo: editor enriquecido. Lo que se escribe acá es una
+         plantilla, no el texto final: las variables se reemplazan al enviar. -->
+    @if (muestraCampo('cuerpoCorreo')) {
+      <div class="col-12 field">
+        <label for="cuerpoCorreo" class="block text-sm font-medium mb-2">
+          Cuerpo del correo
+          <span class="text-color-secondary font-normal">(vacío = uno automático con todos los datos)</span>
+        </label>
+        <p-editor
+          formControlName="cuerpoCorreo"
+          [style]="{ height: '16rem' }"
+          (onInit)="onEditorInit($event)"
+        >
+          <ng-template #header>
+            <span class="ql-formats">
+              <button type="button" class="ql-bold" aria-label="Negrita"></button>
+              <button type="button" class="ql-italic" aria-label="Cursiva"></button>
+              <button type="button" class="ql-underline" aria-label="Subrayado"></button>
+            </span>
+            <span class="ql-formats">
+              <button type="button" class="ql-list" value="ordered" aria-label="Lista numerada"></button>
+              <button type="button" class="ql-list" value="bullet" aria-label="Lista con viñetas"></button>
+            </span>
+            <span class="ql-formats">
+              <button type="button" class="ql-link" aria-label="Enlace"></button>
+              <button type="button" class="ql-clean" aria-label="Quitar formato"></button>
+            </span>
+          </ng-template>
+        </p-editor>
+
+        @if (variables().length > 0) {
+          <div class="flex flex-column gap-2 mt-2">
+            <small class="text-color-secondary">
+              Tocá una variable para insertarla <strong>donde está el cursor</strong>:
+            </small>
+            <div class="flex flex-wrap gap-1">
+              @for (variable of variables(); track variable.clave) {
+                <p-chip
+                  [label]="'{{' + variable.clave + '}}'"
+                  styleClass="cursor-pointer text-sm"
+                  [pTooltip]="variable.descripcion + ' — ej: ' + variable.ejemplo"
+                  tooltipPosition="left"
+                  (click)="insertarVariableEnCuerpo(variable.clave)"
+                />
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    @if (muestraCampo('url')) {
+      <div class="col-12 field">
+        <label for="url" class="block text-sm font-medium mb-2">Dirección del otro sistema</label>
+        <input
+          pInputText
+          id="url"
+          formControlName="url"
+          placeholder="https://hooks.slack.com/services/..."
+          autocomplete="off"
+          [invalid]="isFieldInvalid('url')"
+          [fluid]="true"
+        />
+        @if (isFieldInvalid('url')) {
+          <p-message severity="error" size="small" variant="simple">
+            Indicá la dirección a la que hay que avisar.
+          </p-message>
+        } @else {
+          <small class="text-color-secondary">
+            Es la dirección web que te dio el otro sistema para recibir avisos. Tiene que empezar con
+            <strong>https://</strong> y ser accesible desde internet.
+          </small>
+        }
+      </div>
+    }
+
+    <!-- Cuerpo del POST: plantilla JSON. Existe porque un servicio concreto suele
+         exigir una forma propia (Slack pide {"text": ...}), y el payload de AGUARD
+         no le sirve. El backend valida que quede JSON válido al sustituir. -->
+    @if (muestraCampo('cuerpoHttp')) {
+      <div class="col-12 field">
+        <label for="cuerpoHttp" class="block text-sm font-medium mb-2">
+          Formato del aviso
+          <span class="text-color-secondary font-normal">(si lo dejás vacío se envían todos los datos)</span>
+        </label>
+        <textarea
+          pTextarea
+          id="cuerpoHttp"
+          #areaJson
+          formControlName="cuerpoHttp"
+          rows="7"
+          spellcheck="false"
+          placeholder='{ "text": "Alerta {{ "{{nivelEtiqueta}}" }}", "nivel": {{ "{{nivel}}" }} }'
+          class="font-mono text-sm"
+          [fluid]="true"
+        ></textarea>
+
+        <div class="flex flex-column gap-2 mt-2">
+          <div class="flex align-items-center gap-2 flex-wrap">
+            <small class="text-color-secondary">
+              Completalo solo si el otro sistema pide los datos con una forma particular. Se verifica al guardar,
+              así que si queda mal armado te avisamos en el momento. Si no sabés qué poner, empezá por el ejemplo.
+            </small>
+            <p-button
+              label="Usar un ejemplo"
+              icon="pi pi-file-edit"
+              [text]="true"
+              [rounded]="true"
+              size="small"
+              (onClick)="usarEjemploJson()"
+            />
+          </div>
+
+          @if (variables().length > 0) {
+            <div class="flex flex-wrap gap-1">
+              @for (variable of variables(); track variable.clave) {
+                <p-chip
+                  [label]="'{{' + variable.clave + '}}'"
+                  styleClass="cursor-pointer text-sm"
+                  [pTooltip]="variable.descripcion + ' — ej: ' + variable.ejemplo"
+                  tooltipPosition="left"
+                  (click)="insertarVariableEnJson(variable.clave, areaJson)"
+                />
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Cabeceras: lo que permite llamar a una API que pide autenticación. -->
+    @if (muestraCampo('cabeceras')) {
+      <div class="col-12 field">
+        <div class="flex align-items-center justify-content-between gap-2 mb-2 flex-wrap">
+          <label class="block text-sm font-medium m-0">
+            Datos de acceso <span class="text-color-secondary font-normal">(opcional)</span>
+          </label>
+          <p-button
+            label="Agregar dato de acceso"
+            icon="pi pi-plus"
+            [text]="true"
+            [rounded]="true"
+            size="small"
+            (onClick)="agregarCabecera()"
+          />
+        </div>
+
+        @if (cabeceras.length === 0) {
+          <small class="text-color-secondary">
+            Solo hace falta si el otro sistema pide una clave de acceso para recibir los avisos. En ese caso, él te
+            indica qué nombre y qué valor cargar acá.
+          </small>
+        } @else {
+          <div class="flex flex-column gap-2">
+            @for (grupo of cabeceras.controls; track $index) {
+              <div [formGroup]="grupo" class="flex flex-column sm:flex-row gap-2 sm:align-items-start">
+                <input
+                  pInputText
+                  formControlName="nombre"
+                  placeholder="Nombre"
+                  autocomplete="off"
+                  aria-label="Nombre del dato de acceso"
+                  class="sm:w-14rem"
+                  [invalid]="grupo.controls.nombre.invalid && grupo.controls.nombre.touched"
+                  [fluid]="true"
+                />
+                <div class="flex-1 flex flex-column gap-1">
+                  <p-password
+                    formControlName="valor"
+                    [feedback]="false"
+                    [toggleMask]="true"
+                    [fluid]="true"
+                    autocomplete="new-password"
+                    [placeholder]="
+                      grupo.controls.tieneValor.value ? 'Guardado — dejalo vacío para no cambiarlo' : 'Valor'
+                    "
+                  />
+                  @if (grupo.controls.tieneValor.value) {
+                    <small class="text-color-secondary">
+                      Hay un valor guardado. Por seguridad no se muestra.
+                    </small>
+                  }
+                </div>
+                <p-button
+                  icon="pi pi-trash"
+                  severity="danger"
+                  [text]="true"
+                  [rounded]="true"
+                  pTooltip="Quitar este dato de acceso"
+                  tooltipPosition="left"
+                  ariaLabel="Quitar el dato de acceso"
+                  (onClick)="quitarCabecera($index)"
+                />
+              </div>
+            }
+          </div>
+          <small class="text-color-secondary">
+            Los valores se guardan protegidos y no vuelven a mostrarse. Algunos datos técnicos los agrega el
+            sistema por su cuenta y no se pueden modificar desde acá.
+          </small>
+        }
+      </div>
+    }
+
+    @if (muestraCampo('secretoFirma')) {
+      <div class="col-12 field">
+        <label for="secretoFirma" class="block text-sm font-medium mb-2">
+          Clave de verificación
+          <span class="text-color-secondary font-normal">
+            @if (regla()?.tieneSecretoFirma && !borrarSecreto()) {
+              (dejalo vacío para no cambiarlo)
+            } @else {
+              (opcional)
+            }
+          </span>
+        </label>
+        <p-password
+          inputId="secretoFirma"
+          formControlName="secretoFirma"
+          [feedback]="false"
+          [toggleMask]="true"
+          [fluid]="true"
+          autocomplete="new-password"
+        />
+        <div class="flex align-items-center gap-2 mt-1 flex-wrap">
+          @if (borrarSecreto()) {
+            <p-tag value="Se va a borrar al guardar" severity="warn" [rounded]="true" />
+            <p-button label="Cancelar" [text]="true" [rounded]="true" size="small" (onClick)="cancelarBorrarSecreto()" />
+          } @else if (regla()?.tieneSecretoFirma) {
+            <p-tag value="Hay una clave guardada" severity="secondary" [rounded]="true" />
+            <p-button
+              label="Quitarlo"
+              icon="pi pi-times"
+              severity="danger"
+              [text]="true"
+              [rounded]="true"
+              size="small"
+              pTooltip="Enviar los avisos sin firma de verificación"
+              tooltipPosition="left"
+              (onClick)="marcarParaBorrarSecreto()"
+            />
+          } @else {
+            <small class="text-color-secondary">
+              Si cargás una clave, cada aviso sale firmado con ella, y así el otro sistema puede comprobar que
+              realmente lo envió AGUARD y no un tercero. Se guarda protegida y no vuelve a mostrarse.
+            </small>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Interruptor -->
+    <div class="col-12 field">
+      <div class="flex align-items-center gap-3">
+        <p-toggleswitch inputId="activa" formControlName="activa" />
+        <label for="activa" class="text-sm font-medium">Regla activa</label>
+      </div>
+      <small class="text-color-secondary">
+        Una regla inactiva no envía avisos, pero igual podés probarla desde el listado.
+      </small>
+    </div>
+  </form>
+
+  <ng-template #footer>
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [text]="true"
+      [rounded]="true"
+      [disabled]="guardando()"
+      (onClick)="cancelar()"
+    />
+    <p-button
+      [label]="esEdicion() ? 'Guardar cambios' : 'Crear regla'"
+      icon="pi pi-check"
+      [rounded]="true"
+      [loading]="guardando()"
+      (onClick)="guardar()"
+    />
+  </ng-template>
+</p-dialog>

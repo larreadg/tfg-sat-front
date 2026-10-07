@@ -1,0 +1,66 @@
+<p-table [value]="array().controls" styleClass="p-datatable-sm">
+  <ng-template #header>
+    <tr>
+      <th class="text-sm font-normal text-color-secondary">Respuesta</th>
+      <th class="text-sm font-normal text-color-secondary" style="width: 7rem">Puntaje</th>
+      @if (editable()) {
+        <th style="width: 4rem"></th>
+      }
+    </tr>
+  </ng-template>
+
+  <ng-template #body let-fila let-i="rowIndex">
+    <tr [formGroup]="grupoDe(i)">
+      <td>
+        @if (colgada(i)) {
+          <!-- La configuración puntúa una respuesta que la encuesta activa ya no
+               ofrece: su puntaje nunca se va a aplicar. Es la única fila que se
+               puede quitar, y la única donde se muestra el identificador interno,
+               porque es lo único que queda de esa respuesta. -->
+          <div class="flex align-items-center gap-2 flex-wrap">
+            <p-tag severity="danger" value="Esta respuesta ya no existe" icon="pi pi-exclamation-triangle" />
+            <span class="text-color-secondary text-sm">{{ codigoDe(i) }}</span>
+          </div>
+        } @else {
+          <span>{{ textoDe(i) }}</span>
+        }
+      </td>
+      <td>
+        <p-inputnumber
+          formControlName="valor"
+          mode="decimal"
+          [min]="0"
+          [max]="5"
+          [minFractionDigits]="0"
+          [maxFractionDigits]="2"
+          [fluid]="true"
+        />
+      </td>
+      @if (editable()) {
+        <td class="text-right">
+          @if (colgada(i)) {
+            <p-button
+              icon="pi pi-trash"
+              [text]="true"
+              [rounded]="true"
+              severity="danger"
+              size="small"
+              ariaLabel="Quitar la opción que ya no existe"
+              pTooltip="Sacar esta respuesta de la tabla"
+              tooltipPosition="left"
+              (onClick)="quitar.emit(i)"
+            />
+          }
+        </td>
+      }
+    </tr>
+  </ng-template>
+
+  <ng-template #emptymessage>
+    <tr>
+      <td [attr.colspan]="editable() ? 3 : 2">
+        <span class="text-color-secondary text-sm">Esta pregunta no tiene respuestas para puntuar.</span>
+      </td>
+    </tr>
+  </ng-template>
+</p-table>

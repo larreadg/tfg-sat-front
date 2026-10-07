@@ -1,0 +1,66 @@
+// La tarjeta vive dentro del DOM de `p-card`, fuera del encapsulamiento de este
+// componente: de ahí el `:host ::ng-deep` (mismo recurso que `foto-selector.scss`
+// y `motor-criticidad.scss`). Todo lo que se ajusta son tokens `--p-*` del tema
+// o propiedades que PrimeFlex no cubre (line-clamp, cursor de arrastre).
+
+$tarjeta-transition: 150ms cubic-bezier(0.165, 0.84, 0.44, 1);
+
+:host {
+  display: block;
+}
+
+:host ::ng-deep .alerta-tarjeta {
+  // Una tarjeta de Kanban tiene que entrar en una columna angosta y ser chata:
+  // el padding por defecto de `p-card` es de ficha, no de tarjeta.
+  --p-card-body-padding: 0.5rem 0.625rem;
+
+  transition:
+    box-shadow $tarjeta-transition,
+    transform $tarjeta-transition,
+    opacity $tarjeta-transition;
+}
+
+// Arrastrable: el cursor y el leve despegue al pasar por encima son la única
+// pista de que la tarjeta se puede levantar.
+:host ::ng-deep .alerta-tarjeta--arrastrable {
+  cursor: grab;
+  user-select: none;
+
+  // La sombra la pone `hover:shadow-3` (PrimeFlex); acá solo el despegue.
+  &:hover {
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    cursor: grabbing;
+    transform: none;
+  }
+}
+
+// PATCH en vuelo: la tarjeta ya se movió de columna pero el back no confirmó.
+:host ::ng-deep .alerta-tarjeta--en-curso {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+// El asidero aparece recién al apuntar la tarjeta: ruido visual cero cuando
+// solo se está leyendo el tablero.
+.alerta-tarjeta__asidero {
+  opacity: 0;
+  transition: opacity $tarjeta-transition;
+}
+
+:host ::ng-deep .alerta-tarjeta--arrastrable:hover .alerta-tarjeta__asidero {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host ::ng-deep .alerta-tarjeta,
+  .alerta-tarjeta__asidero {
+    transition: none;
+  }
+
+  :host ::ng-deep .alerta-tarjeta--arrastrable:hover {
+    transform: none;
+  }
+}

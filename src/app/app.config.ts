@@ -1,14 +1,20 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { ApplicationConfig, LOCALE_ID, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { providePrimeNG } from 'primeng/config';
+import { registerLocaleData } from '@angular/common';
+import localeEs from '@angular/common/locales/es';
 import { definePreset } from '@primeuix/styled';
 import Aura from '@primeng/themes/aura';
 import { MessageService } from 'primeng/api';
 
 import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
+
+// La app es en español: sin registrar el locale, `DatePipe` formatea en inglés
+// (nombres de mes y día). Los formatos numéricos ya usados no cambian.
+registerLocaleData(localeEs, 'es');
 
 const AuraCyan = definePreset(Aura, {
   semantic: {
@@ -31,13 +37,16 @@ const AuraCyan = definePreset(Aura, {
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
+    { provide: LOCALE_ID, useValue: 'es' },
     provideRouter(routes),
     provideAnimationsAsync(),
     provideHttpClient(withInterceptors([authInterceptor])),
     providePrimeNG({
       theme: {
         preset: AuraCyan,
-        options: { darkModeSelector: false }
+        // Selector manual (no `'system'`): el tema lo elige la persona con el
+        // interruptor del encabezado. La clase la pone `TemaService` en `<html>`.
+        options: { darkModeSelector: '.app-dark' }
       }
     }),
     MessageService

@@ -39,6 +39,11 @@ testem.log
 /typings
 __screenshots__/
 
+# Local HTTPS dev certs
+/certs
+
 # System files
 .DS_Store
 Thumbs.db
+
+.references/

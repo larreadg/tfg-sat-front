@@ -1,24 +1,34 @@
-// PrimeFlex no expone utilidades de hover/transform: SCSS justificado para dar
-// retroalimentación de estado (elevación) en los accesos rápidos de inicio.
+// PrimeFlex no expone utilidades de hover: el SCSS mínimo acá es para dar
+// retroalimentación de estado (fila apuntable, cifra enlazada), no decoración.
+// Todos los colores salen de variables del tema.
 
-.inicio-tile {
-  transition:
-    box-shadow 180ms ease-out,
-    transform 180ms ease-out;
+.inicio-fila {
+  transition: background-color 160ms ease-out;
+
+  &:hover {
+    background-color: var(--p-content-hover-background);
+  }
+}
+
+// Las cifras del encabezado son enlaces: subrayan al pasar para que se lea que
+// llevan a algún lado, sin pintarlas de color y competir con el titular.
+.inicio-cifra,
+.inicio-cifra-enlace {
+  text-decoration-color: transparent;
+  transition: text-decoration-color 160ms ease-out;
 
   &:hover,
-  &:focus-within {
-    transform: translateY(-2px);
-    box-shadow: 0 0 0 1px var(--p-primary-300);
+  &:focus-visible {
+    text-decoration: underline;
+    text-decoration-color: currentColor;
+    text-underline-offset: 3px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .inicio-tile {
+  .inicio-fila,
+  .inicio-cifra,
+  .inicio-cifra-enlace {
     transition: none;
-
-    &:hover {
-      transform: none;
-    }
   }
 }

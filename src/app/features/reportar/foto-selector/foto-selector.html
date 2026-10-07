@@ -1,0 +1,67 @@
+<div class="foto-selector flex flex-column gap-3" [class.foto-selector--disabled]="disabled()">
+  <div class="foto-selector__wrapper">
+    <ng-container [ngTemplateOutlet]="box" [ngTemplateOutletContext]="{ $implicit: 0 }" />
+  </div>
+
+  @if (indicesSecundarios().length > 0) {
+    <div class="grid">
+      @for (indice of indicesSecundarios(); track indice) {
+        <div class="col-6 md:col-4">
+          <div class="foto-selector__wrapper">
+            <ng-container [ngTemplateOutlet]="box" [ngTemplateOutletContext]="{ $implicit: indice }" />
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>
+
+<ng-template #box let-index>
+  @let slot = slots()[index];
+
+  <div
+    class="foto-selector__box"
+    [class.foto-selector__box--principal]="index === 0"
+    [class.foto-selector__box--filled]="!!slot.previewUrl"
+    [class.foto-selector__box--error]="!!slot.error"
+    role="button"
+    [attr.tabindex]="disabled() ? -1 : 0"
+    [attr.aria-disabled]="disabled() ? true : null"
+    [attr.aria-label]="etiquetaSeleccion(index)"
+    (click)="openFileSelector(index)"
+    (keydown)="onBoxKeydown($event, index)"
+  >
+    @if (slot.previewUrl) {
+      <img [src]="slot.previewUrl" alt="" class="foto-selector__preview" />
+      <p-button
+        type="button"
+        icon="pi pi-times"
+        size="small"
+        [rounded]="true"
+        severity="danger"
+        styleClass="foto-selector__remove"
+        [ariaLabel]="etiquetaQuitar(index)"
+        [disabled]="disabled()"
+        (onClick)="removePhoto(index, $event)"
+        (keydown)="$event.stopPropagation()"
+      />
+    } @else {
+      <i class="pi pi-camera foto-selector__icon" aria-hidden="true"></i>
+    }
+  </div>
+
+  @if (slot.error) {
+    <p-message severity="error" size="small" variant="simple">{{ slot.error }}</p-message>
+  }
+
+  <input
+    #fileInput
+    type="file"
+    class="foto-selector__input"
+    accept="image/jpeg,image/png,image/webp"
+    tabindex="-1"
+    aria-hidden="true"
+    [disabled]="disabled()"
+    (change)="onFileSelected($event, index)"
+  />
+</ng-template>

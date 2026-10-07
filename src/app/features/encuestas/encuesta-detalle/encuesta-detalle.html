@@ -1,0 +1,111 @@
+<p-dialog
+  [(visible)]="visible"
+  [modal]="true"
+  [maximizable]="true"
+  [draggable]="false"
+  [dismissableMask]="true"
+  [style]="{ width: '58rem' }"
+  [breakpoints]="{ '1199px': '92vw', '575px': '96vw' }"
+>
+  <ng-template #header>
+    <div class="flex align-items-center gap-2 flex-wrap">
+      <i class="pi pi-list-check text-color-secondary"></i>
+      @if (detalle(); as d) {
+        <span class="font-semibold">Versión {{ d.version }}</span>
+        @if (d.activo) {
+          <p-tag value="Activa" severity="success" [rounded]="true" />
+        } @else if (d.editable) {
+          <p-tag value="Borrador" severity="warn" [rounded]="true" />
+        } @else {
+          <p-tag value="Archivada" severity="secondary" [rounded]="true" />
+        }
+      } @else {
+        <span class="font-semibold">Versión del cuestionario</span>
+      }
+    </div>
+  </ng-template>
+
+  @if (loading()) {
+    <div class="flex flex-column gap-3">
+      <p-skeleton height="3rem" />
+      <p-skeleton height="12rem" borderRadius="8px" />
+    </div>
+  } @else if (error()) {
+    <div class="flex flex-column align-items-center gap-3 py-5 text-center">
+      <i class="pi pi-exclamation-triangle text-3xl text-color-secondary"></i>
+      <span class="font-medium">No se pudo cargar la versión</span>
+      <p-button label="Reintentar" icon="pi pi-refresh" [rounded]="true" (onClick)="reintentar()" />
+    </div>
+  } @else if (detalle(); as d) {
+    <div class="flex flex-column gap-4">
+      <div class="flex flex-column gap-1">
+        <span class="font-medium">{{ d.nombre }}</span>
+        @if (d.descripcion) {
+          <span class="text-sm text-color-secondary">{{ d.descripcion }}</span>
+        }
+      </div>
+
+      @if (!d.editable) {
+        <p-message
+          severity="info"
+          text="Esta versión ya tiene reportes: queda como está para poder reconstruir el histórico. Para cambiar algo, creá una versión nueva a partir de ella."
+        />
+      }
+
+      <!-- Fotos -->
+      <div class="flex flex-column gap-2 surface-border border-1 border-round p-3">
+        <div class="flex align-items-center gap-2 flex-wrap">
+          <i class="pi pi-images text-color-secondary"></i>
+          <span class="font-medium">Fotos del agua</span>
+          <p-tag value="Obligatorias" severity="contrast" [rounded]="true" />
+          <span class="text-sm">
+            @if (d.fotosMin === d.fotosMax) {
+              Exactamente {{ d.fotosMin }}
+            } @else {
+              De {{ d.fotosMin }} a {{ d.fotosMax }}
+            }
+          </span>
+        </div>
+        @if (preguntaFoto(); as pf) {
+          <span class="text-xs text-color-secondary">Paso en el formulario: "{{ pf.texto }}"</span>
+        }
+      </div>
+
+      <!-- Preguntas -->
+      <div class="flex flex-column gap-3">
+        <span class="font-medium">Preguntas ({{ preguntasCuestionario().length }})</span>
+
+        @for (p of preguntasCuestionario(); track p.id) {
+          <div class="flex flex-column gap-2 surface-border border-1 border-round p-3">
+            <div class="flex flex-column gap-1">
+              <span class="font-medium">{{ p.orden + 1 }}. {{ p.texto }}</span>
+              <div class="flex align-items-center flex-wrap gap-2">
+                <span class="text-xs text-color-secondary">{{ etiquetaTipo(p.tipo) }}</span>
+                @if (p.usadaEnCriticidad) {
+                  <p-tag
+                    value="Puntúa criticidad"
+                    severity="info"
+                    [rounded]="true"
+                    pTooltip="La configuración activa del motor puntúa esta pregunta. La identifica por su código, no por el texto."
+                    tooltipPosition="left"
+                  />
+                }
+              </div>
+            </div>
+            <div class="flex align-items-center flex-wrap gap-2">
+              @for (o of p.opciones; track o.id) {
+                <p-tag [value]="o.texto" severity="secondary" [rounded]="true" />
+              }
+            </div>
+          </div>
+        } @empty {
+          <span class="text-sm text-color-secondary">Esta versión no tiene preguntas.</span>
+        }
+      </div>
+    </div>
+  }
+
+  <ng-template #footer>
+    <p-button label="Cerrar" [text]="true" [rounded]="true" severity="secondary" (onClick)="cerrar()" />
+  </ng-template>
+</p-dialog>

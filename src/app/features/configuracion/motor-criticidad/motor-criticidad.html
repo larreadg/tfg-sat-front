@@ -1,0 +1,868 @@
+<p-confirmdialog [style]="{ width: '34rem' }" [breakpoints]="{ '768px': '95vw' }">
+  <ng-template #message let-mensaje>
+    <div class="flex flex-column gap-3">
+      <span>
+        Se va a crear la versión {{ versionSiguiente() }} con estos cambios y pasará a ser la activa:
+      </span>
+      <ul class="m-0 pl-4 flex flex-column gap-1">
+        @for (cambio of cambiosPendientes(); track cambio) {
+          <li class="font-medium">{{ cambio }}</li>
+        }
+      </ul>
+      <span class="text-sm text-color-secondary">{{ mensaje.message }}</span>
+    </div>
+  </ng-template>
+</p-confirmdialog>
+
+@if (error()) {
+  <p-message severity="error" styleClass="w-full">
+    <div class="flex align-items-center justify-content-between gap-3 w-full">
+      <span>No se pudo cargar la configuración del motor.</span>
+      <p-button label="Reintentar" icon="pi pi-refresh" [text]="true" [rounded]="true" (onClick)="reintentar()" />
+    </div>
+  </p-message>
+} @else if (loading()) {
+  <div class="flex flex-column gap-3">
+    @for (fila of filasSkeleton; track $index) {
+      <p-skeleton height="4rem" />
+    }
+  </div>
+} @else if (configActiva(); as config) {
+  <form [formGroup]="form" class="flex flex-column gap-3">
+    <!-- Barra de acciones. Queda pegada arriba porque el formulario es largo y
+         el guardar tiene que estar siempre a mano. -->
+    <p-toolbar styleClass="barra-acciones border-round-lg">
+      <ng-template #start>
+        <div class="flex align-items-center gap-2 flex-wrap">
+          <p-tag [value]="'Versión activa: v' + config.version" severity="secondary" [rounded]="true" />
+          @if (form.dirty) {
+            <p-tag value="Cambios sin guardar" severity="warn" [rounded]="true" />
+          }
+          @if (!pesosSuman()) {
+            <p-tag value="Los pesos no suman 1" severity="danger" [rounded]="true" />
+          }
+        </div>
+      </ng-template>
+      <ng-template #end>
+        @if (puedeEditar) {
+          <div class="flex gap-2">
+            <p-button
+              label="Descartar"
+              icon="pi pi-undo"
+              severity="secondary"
+              [text]="true"
+              [rounded]="true"
+              [disabled]="!form.dirty || guardando()"
+              (onClick)="descartar()"
+            />
+            <p-button
+              label="Guardar como nueva versión"
+              icon="pi pi-save"
+              [rounded]="true"
+              [loading]="guardando()"
+              [disabled]="!form.dirty"
+              (onClick)="guardar()"
+            />
+          </div>
+        }
+      </ng-template>
+    </p-toolbar>
+
+    @if (!puedeEditar) {
+      <p-message severity="warn" styleClass="w-full">
+        <span class="text-sm">Solo lectura: no tenés el permiso para crear versiones nuevas.</span>
+      </p-message>
+    }
+
+    @if (!encuestaActiva()) {
+      <p-message severity="warn" styleClass="w-full">
+        <span class="text-sm">
+          No hay ninguna versión de encuesta activa, así que no hay preguntas para armar reglas. Activá una en el
+          módulo de Encuestas y volvé acá.
+        </span>
+      </p-message>
+    }
+
+    <!-- El modo de falla que este editor existe para evitar: una regla que apunta a
+         una pregunta u opción que la encuesta activa ya no tiene no da error, el
+         factor se queda sin aporte y la criticidad baja en silencio. El backend
+         rechaza guardar así. -->
+    @if (desincronizaciones().length > 0) {
+      <p-message severity="error" styleClass="w-full">
+        <div class="flex flex-column gap-2">
+          <span class="font-medium">La configuración no coincide con la encuesta activa</span>
+          <ul class="m-0 pl-4 flex flex-column gap-1">
+            @for (problema of desincronizaciones(); track problema.donde + problema.detalle) {
+              <li class="text-sm">
+                <strong>{{ problema.donde }}</strong>: {{ problema.detalle }}
+              </li>
+            }
+          </ul>
+          <span class="text-sm">
+            Mientras siga así, esos puntajes no se aplican. Corregí lo marcado en rojo antes de crear la versión.
+          </span>
+        </div>
+      </p-message>
+    }
+
+    <!-- El otro modo de falla silencioso: un factor cuyo peor caso no llega al tope
+         entra a la media ponderada con su peso completo pero nunca puede llevar el
+         reporte al rojo. El peso configurado deja de significar lo que dice y el
+         reporte más grave posible queda subclasificado. El backend también lo rechaza. -->
+    @if (factoresSinAlcance().length > 0) {
+      <p-message severity="error" styleClass="w-full">
+        <div class="flex flex-column gap-2">
+          <span class="font-medium">Hay factores que no pueden llegar al máximo de la escala</span>
+          <ul class="m-0 pl-4 flex flex-column gap-1">
+            @for (problema of factoresSinAlcance(); track problema.factor) {
+              <li class="text-sm">
+                <strong>{{ problema.etiqueta }}</strong>: como máximo llega a
+                {{ problema.maximo | number: '1.1-2' }} de {{ topeFactor }}. Un reporte con las peores
+                respuestas posibles de este factor nunca va a entrar como riesgo alto.
+              </li>
+            }
+          </ul>
+          <span class="text-sm">
+            Los cinco factores se promedian entre sí, así que todos tienen que usar la misma escala
+            0–{{ topeFactor }}. Subí los puntajes o usá «Escalar a {{ topeFactor }}» en el factor.
+          </span>
+        </div>
+      </p-message>
+    }
+
+    <!-- `value` del Accordion es un `model()` (bidireccional), así que va con
+         `[(value)]` sobre el signal. Con un binding de una vía —y peor, un array
+         literal, que Angular recrea en cada ciclo de detección— PrimeNG recibía de
+         vuelta el valor inicial y reabría los cinco paneles: ninguna sección se
+         podía colapsar. -->
+    <p-accordion [(value)]="seccionesAbiertas" [multiple]="true">
+      <!-- 1. Pesos -->
+      <p-accordion-panel value="pesos">
+        <p-accordion-header>
+          <app-seccion-header
+            icono="pi pi-chart-pie"
+            tono="primary"
+            titulo="Pesos de los factores"
+            subtitulo="Cuánto influye cada factor en la criticidad final"
+            [resumen]="resumenPesos()"
+            [severidadResumen]="pesosSuman() ? 'success' : 'danger'"
+          />
+        </p-accordion-header>
+        <p-accordion-content>
+          <div class="pl-0 sm:pl-6">
+          <p class="text-color-secondary mt-0 mb-3">
+            Tienen que sumar exactamente 1. Si un factor no está disponible para un reporte, el motor reparte su peso
+            entre los que sí lo están.
+          </p>
+
+          <div class="flex flex-column sm:flex-row flex-wrap gap-3 mb-3" formGroupName="pesos">
+            @for (factor of ['f1', 'f2', 'f3', 'f4', 'f5']; track factor) {
+              <div class="flex-1" style="min-width: 8rem">
+                <label [for]="'peso-' + factor" class="block text-sm font-medium mb-2 uppercase">{{ factor }}</label>
+                <p-inputnumber
+                  [inputId]="'peso-' + factor"
+                  [formControlName]="factor"
+                  mode="decimal"
+                  [min]="0"
+                  [max]="1"
+                  [step]="0.05"
+                  [minFractionDigits]="2"
+                  [maxFractionDigits]="4"
+                  [showButtons]="true"
+                  [fluid]="true"
+                />
+              </div>
+            }
+          </div>
+
+          @if (!pesosSuman()) {
+            <p-message severity="error" size="small" variant="simple">
+              Los pesos suman {{ totalPesos() | number: '1.4-4' }}: tienen que sumar exactamente 1.
+            </p-message>
+          }
+        </div>
+        </p-accordion-content>
+      </p-accordion-panel>
+
+      <!-- 2. Umbrales -->
+      <p-accordion-panel value="umbrales">
+        <p-accordion-header>
+          <app-seccion-header
+            icono="pi pi-flag"
+            tono="amber"
+            titulo="Umbrales de nivel"
+            subtitulo="Dónde se cortan los niveles de prioridad"
+            [resumen]="resumenUmbrales()"
+          />
+        </p-accordion-header>
+        <p-accordion-content>
+          <div class="pl-0 sm:pl-6">
+          <p class="text-color-secondary mt-0 mb-3">
+            Cada corte tiene que ser mayor que el anterior. Las etiquetas describen la <strong>prioridad</strong>
+            de atención, nunca el estado del agua.
+          </p>
+
+          <div class="flex flex-column sm:flex-row gap-3 mb-3" formGroupName="umbralesNivel">
+            @for (umbral of ['n1', 'n2', 'n3']; track umbral) {
+              <div class="flex-1">
+                <label [for]="'umbral-' + umbral" class="block text-sm font-medium mb-2 uppercase">
+                  {{ umbral }}
+                </label>
+                <p-inputnumber
+                  [inputId]="'umbral-' + umbral"
+                  [formControlName]="umbral"
+                  mode="decimal"
+                  [min]="0"
+                  [max]="5"
+                  [step]="0.25"
+                  [minFractionDigits]="2"
+                  [showButtons]="true"
+                  [fluid]="true"
+                />
+              </div>
+            }
+          </div>
+
+          @if (umbrales.hasError('umbralesNoCrecientes')) {
+            <p-message severity="error" size="small" variant="simple">
+              Cada corte tiene que ser mayor que el anterior: N1 menor que N2, y N2 menor que N3.
+            </p-message>
+          } @else {
+            <!-- Preview de la escala resultante -->
+            <div class="flex flex-column gap-2">
+              <span class="text-sm font-medium">Escala resultante</span>
+              <div class="flex flex-wrap gap-2">
+                @for (tramo of tramosNivel(); track tramo.nivel) {
+                  <div class="flex align-items-center gap-2 surface-100 border-round-lg px-3 py-2">
+                    <app-nivel-tag [nivel]="tramo.nivel" />
+                    <span class="text-sm text-color-secondary">
+                      {{ tramo.desde | number: '1.2-2' }} – {{ tramo.hasta | number: '1.2-2' }}
+                    </span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+        </p-accordion-content>
+      </p-accordion-panel>
+
+      <!-- 3. Tablas de puntaje -->
+      <p-accordion-panel value="puntajes">
+        <p-accordion-header>
+          <app-seccion-header
+            icono="pi pi-list-check"
+            tono="indigo"
+            titulo="Puntajes y reglas por pregunta"
+            subtitulo="Qué pregunta alimenta cada factor y con cuánto"
+            [resumen]="resumenPuntajes()"
+          />
+        </p-accordion-header>
+        <p-accordion-content>
+          <div class="pl-0 sm:pl-6">
+          <p class="text-color-secondary mt-0 mb-3">
+            Cada factor suma los puntajes de las preguntas que le asignes. Si el reporte no respondió una pregunta,
+            esa pregunta no aporta y su peso se reparte entre los factores que sí tienen datos.
+          </p>
+
+          <!-- F1. Cada factor abre con una barra de encabezado: es lo que separa un
+               factor del siguiente ahora que todos viven en el mismo panel. -->
+          <div class="flex flex-column gap-3 mb-5">
+            <div class="barra-factor flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-2 border-round">
+              <span class="font-semibold text-color">F1 · Reportes cercanos en la ventana</span>
+              @if (puedeEditar) {
+                <p-button
+                  label="Agregar tramo"
+                  icon="pi pi-plus"
+                  [text]="true"
+                  [rounded]="true"
+                  size="small"
+                  (onClick)="agregarTramo()"
+                />
+              }
+            </div>
+
+            <small class="text-color-secondary">
+              Cuenta cuántos <strong>otros</strong> reportes hay cerca, con el radio y la ventana de la sección
+              Detección geográfica, y convierte ese número en un puntaje.
+            </small>
+
+            <p-table [value]="tramosF1.controls" styleClass="p-datatable-sm">
+              <ng-template #header>
+                <tr>
+                  <th class="text-sm font-normal text-color-secondary">Reportes cercanos</th>
+                  <th class="text-sm font-normal text-color-secondary" style="width: 7rem">Puntaje</th>
+                  <th style="width: 4rem"></th>
+                </tr>
+              </ng-template>
+              <ng-template #body let-fila let-i="rowIndex">
+                <tr [formGroup]="tramoDe(i)">
+                    <td>
+                      <div class="flex align-items-center flex-wrap gap-2">
+                        <span class="text-color-secondary">de {{ desdeTramo(i) }} a</span>
+                        <p-inputnumber
+                          formControlName="max"
+                          mode="decimal"
+                          [min]="0"
+                          [useGrouping]="false"
+                          [disabled]="!puedeEditar"
+                          styleClass="corte-tramo"
+                        />
+                        @if (tramoIncoherente(i)) {
+                          <span class="text-sm text-red-500">
+                            Este tramo no cubre nada: el corte anterior ya llega hasta acá.
+                          </span>
+                        }
+                      </div>
+                    </td>
+                    <td>
+                      <!-- El piso es el puntaje de la fila anterior: F1 mide densidad, y
+                           más reportes cercanos no puede valer menos riesgo. El campo no
+                           deja bajarlo, y `f1Baja` cubre lo que el campo no ve (pegar un
+                           valor, cargar una versión vieja como base). -->
+                      <p-inputnumber
+                        formControlName="valor"
+                        mode="decimal"
+                        [min]="minimoPuntajeF1(i)"
+                        [max]="5"
+                        [minFractionDigits]="0"
+                        [maxFractionDigits]="2"
+                        [fluid]="true"
+                        [disabled]="!puedeEditar"
+                        [invalid]="f1Baja(i)"
+                      />
+                    </td>
+                    <td class="text-right">
+                      @if (puedeEditar) {
+                        <p-button
+                          icon="pi pi-trash"
+                          [text]="true"
+                          [rounded]="true"
+                          severity="danger"
+                          size="small"
+                          ariaLabel="Quitar tramo"
+                          (onClick)="quitarTramo(i)"
+                        />
+                      }
+                    </td>
+                </tr>
+              </ng-template>
+              <ng-template #footer>
+                <tr>
+                  <td class="text-color-secondary">{{ descripcionTramoAbierto }}</td>
+                  <td>
+                    <p-inputnumber
+                      formControlName="f1ValorAbierto"
+                      mode="decimal"
+                      [min]="minimoPuntajeAbierto"
+                      [max]="5"
+                      [minFractionDigits]="0"
+                      [maxFractionDigits]="2"
+                      [fluid]="true"
+                      [disabled]="!puedeEditar"
+                      [invalid]="f1Baja(tramosF1.length)"
+                      pTooltip="Es el tramo más alto de F1, así que tiene que valer 5: es el único que puede llevar F1 al tope de la escala."
+                      tooltipPosition="left"
+                    />
+                  </td>
+                  <td></td>
+                </tr>
+              </ng-template>
+            </p-table>
+
+            @if (tramosF1.hasError('tramosDesordenados')) {
+              <p-message severity="error" size="small" variant="simple">
+                Cada corte tiene que ser mayor que el anterior.
+              </p-message>
+            } @else if (filasF1QueBajan().length > 0) {
+              <p-message severity="error" size="small" variant="simple">
+                Los puntajes no pueden bajar: más reportes cercanos nunca pueden valer menos riesgo que menos
+                reportes.
+              </p-message>
+            } @else {
+              <small class="text-color-secondary">
+                Cada fila fija hasta cuántos reportes cercanos llega su puntaje. El último tramo no tiene techo.
+              </small>
+            }
+          </div>
+
+          <!-- Factores alimentados por el cuestionario: F2, F3 y F5. Las preguntas se
+               eligen, no se escriben; las opciones salen de la encuesta activa. -->
+          @for (factor of factores; track factor) {
+            <div class="flex flex-column gap-3 mb-5" [formGroup]="factorGrupo(factor)">
+              <div class="barra-factor flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-2 border-round">
+                <span class="font-semibold text-color">{{ etiquetaFactor[factor] }}</span>
+                <div class="flex flex-wrap align-items-center gap-2">
+                  <p-tag
+                    [value]="indicesDe(factor).length + ' pregunta(s)'"
+                    [severity]="indicesDe(factor).length > 0 ? 'secondary' : 'warn'"
+                    [rounded]="true"
+                  />
+                  <!-- El atajo aparece SOLO cuando el factor no llega al tope. Mientras
+                       está bien, la barra no dice nada: el aviso de arriba ya cubre el
+                       caso malo y acá el ruido permanente no aportaba. -->
+                  @if (puedeEditar && factorBloquea(factor)) {
+                    <p-button
+                      [label]="'Escalar a ' + topeFactor"
+                      icon="pi pi-arrows-v"
+                      severity="danger"
+                      size="small"
+                      [text]="true"
+                      [rounded]="true"
+                      pTooltip="Multiplica todos los puntajes del factor para que el peor caso llegue justo al tope, manteniendo las proporciones actuales."
+                      tooltipPosition="left"
+                      (onClick)="escalarFactor(factor)"
+                    />
+                  }
+                  @if (puedeEditar) {
+                    <p-button
+                      label="Agregar pregunta"
+                      icon="pi pi-plus"
+                      size="small"
+                      [outlined]="true"
+                      [rounded]="true"
+                      [disabled]="preguntasParaAgregar(factor).length === 0"
+                      (onClick)="abrirDialogoPregunta(factor)"
+                    />
+                  }
+                  <label [for]="'modo-' + factor" class="text-sm text-color-secondary">Cómo se combinan</label>
+                  <!-- `appendTo="body"`: montado en línea, el panel del select se abría
+                       dentro del contenedor del acordeón y le generaba scroll horizontal
+                       a toda la página. El ancho fijo (`modo-factor`) es para que el
+                       panel no quede más angosto que la opción más larga. -->
+                  <p-select
+                    [inputId]="'modo-' + factor"
+                    formControlName="modo"
+                    [options]="modos"
+                    optionLabel="label"
+                    optionValue="value"
+                    [disabled]="!puedeEditar"
+                    appendTo="body"
+                    size="small"
+                    styleClass="modo-factor"
+                  />
+                </div>
+              </div>
+
+              <!-- Las preguntas del factor van sangradas y cada una en su tarjeta: el
+                   grupo se lee como una unidad y se ve dónde empieza y termina cada
+                   pregunta. El peso sube al encabezado de la tarjeta (su explicación
+                   pasó a un tooltip) porque repetir ese texto en cada pregunta era
+                   la mitad del ruido del bloque. -->
+              <div class="flex flex-column gap-3 pl-0 sm:pl-4">
+                @for (indice of indicesDe(factor); track indice) {
+                  <!-- `[formGroup]` va en el div y no en el `p-panel` para no atar la
+                       directiva al ciclo de vida del panel colapsado. -->
+                  <div [formGroup]="reglaDe(indice)">
+                    <!-- Cerrado por defecto: lo que importa de un vistazo es QUÉ preguntas
+                         puntúan el factor, no los puntajes de cada opción. El toggle es el
+                         ícono (`toggler` por defecto), así que el peso y el botón de quitar
+                         se pueden usar sin abrir ni cerrar el panel. -->
+                    <p-panel
+                      [toggleable]="true"
+                      [collapsed]="true"
+                      [pt]="{
+                        header: { class: 'gap-3' },
+                        title: { class: 'flex-1 min-w-0' },
+                        headerActions: { class: 'flex align-items-center gap-2 flex-shrink-0 flex-nowrap' }
+                      }"
+                    >
+                      <ng-template #headericons let-colapsado>
+                        <i class="pi" [class.pi-chevron-down]="colapsado" [class.pi-chevron-up]="!colapsado"></i>
+                      </ng-template>
+                      <ng-template #header>
+                        <div class="flex flex-column gap-1">
+                          <span class="font-medium text-color">{{ textoPreguntaDe(indice) }}</span>
+                          @if (reglaColgada(indice)) {
+                            <p-tag
+                              severity="danger"
+                              value="Esta pregunta ya no está en la encuesta activa"
+                              icon="pi pi-exclamation-triangle"
+                            />
+                          }
+                        </div>
+                      </ng-template>
+
+                      <ng-template #icons>
+                        <div class="flex align-items-center gap-2">
+                          <label
+                            [for]="'peso-regla-' + indice"
+                            class="text-sm text-color-secondary white-space-nowrap"
+                            pTooltip="Cuánto pesa esta pregunta frente a las otras del factor. En 1 todas valen igual; en 2, esta vale el doble."
+                            tooltipPosition="left"
+                          >
+                            Peso
+                          </label>
+                          <p-inputnumber
+                            [inputId]="'peso-regla-' + indice"
+                            formControlName="peso"
+                            mode="decimal"
+                            [min]="0.01"
+                            [max]="10"
+                            [step]="0.5"
+                            [maxFractionDigits]="2"
+                            [disabled]="!puedeEditar"
+                            styleClass="peso-regla"
+                          />
+                          @if (puedeEditar) {
+                            <p-button
+                              icon="pi pi-trash"
+                              [text]="true"
+                              [rounded]="true"
+                              severity="danger"
+                              size="small"
+                              ariaLabel="Quitar esta pregunta del factor"
+                              pTooltip="Quitar esta pregunta del factor"
+                              tooltipPosition="left"
+                              (onClick)="quitarRegla(indice)"
+                            />
+                          }
+                        </div>
+                      </ng-template>
+
+                      <app-tabla-opciones
+                        [array]="opcionesDeRegla(indice)"
+                        [editable]="puedeEditar"
+                        (quitar)="quitarOpcionDeRegla(indice, $event)"
+                      />
+                    </p-panel>
+                  </div>
+                } @empty {
+                  <small class="text-color-secondary">
+                    Sin preguntas asignadas, este factor no puntúa y su peso se reparte entre los demás.
+                  </small>
+                }
+              </div>
+
+            </div>
+          }
+
+          <!-- Un solo diálogo para los tres factores: cuál está abierto lo dice
+               `factorEnDialogo`. El listado va con filtro porque la encuesta puede
+               tener muchas preguntas y el texto completo es largo. -->
+          <p-dialog
+            [visible]="dialogoAbierto()"
+            (visibleChange)="$event ? null : cerrarDialogoPregunta()"
+            [header]="tituloDialogo()"
+            [modal]="true"
+            [draggable]="false"
+            [dismissableMask]="true"
+            [style]="{ width: '34rem' }"
+            [breakpoints]="{ '640px': '95vw' }"
+          >
+            @if (preguntasDelDialogo().length === 0) {
+              <p class="m-0 text-color-secondary">
+                Este factor ya puntúa todas las preguntas de la encuesta activa.
+              </p>
+            } @else {
+              <p-listbox
+                [options]="preguntasDelDialogo()"
+                [formControl]="preguntaDialogo"
+                optionLabel="label"
+                optionValue="value"
+                [filter]="true"
+                filterBy="label"
+                filterPlaceHolder="Buscar una pregunta"
+                [listStyle]="{ 'max-height': '18rem' }"
+                [fluid]="true"
+                emptyFilterMessage="Ninguna pregunta coincide"
+              />
+            }
+
+            <ng-template #footer>
+              <p-button
+                label="Cancelar"
+                severity="secondary"
+                [text]="true"
+                [rounded]="true"
+                (onClick)="cerrarDialogoPregunta()"
+              />
+              <p-button
+                label="Agregar al factor"
+                icon="pi pi-plus"
+                [rounded]="true"
+                [disabled]="!preguntaElegida()"
+                (onClick)="agregarRegla()"
+              />
+            </ng-template>
+          </p-dialog>
+
+          <!-- F4 y F5 no se configuran: no salen del cuestionario. Se muestran igual,
+               en su lugar del orden F1..F5, para que la sección no parezca tener
+               agujeros y se lea de dónde sale cada factor. -->
+          <div class="flex flex-column gap-2 mb-5">
+            <div class="barra-factor flex align-items-center px-3 py-2 border-round">
+              <span class="font-semibold text-color">F4 · Análisis de IA</span>
+            </div>
+            <small class="text-color-secondary">
+              Usa el puntaje de riesgo que deja el análisis automático de cada reporte, que ya viene en la escala
+              0–{{ topeFactor }}. No tiene nada que configurar. Si el análisis todavía no corrió o falló, F4 no
+              participa y su peso se reparte entre los demás factores.
+            </small>
+          </div>
+
+          <div class="flex flex-column gap-2">
+            <div class="barra-factor flex align-items-center px-3 py-2 border-round">
+              <span class="font-semibold text-color">F5 · Mapa de riesgo</span>
+            </div>
+            <small class="text-color-secondary">
+              Sale de la ubicación del reporte, no del cuestionario, así que no se configura acá: las zonas se dibujan
+              en <strong>Mapa → Mapa de riesgo</strong>. Un reporte que cae dentro de una zona recibe el puntaje de su
+              criticidad (Sin riesgo 1 · Baja 2 · Media 3 · Alta 4 · Crítica {{ topeFactor }}); si cae dentro de varias
+              superpuestas gana la más alta, y si cae fuera de todas vale 0. Sin ninguna zona activa, F5 no participa y
+              su peso se reparte entre los demás factores.
+            </small>
+          </div>
+        </div>
+        </p-accordion-content>
+      </p-accordion-panel>
+
+      <!-- 4. Reglas que actúan sobre el resultado. Son datos: el analista crea las
+           que necesite, elige con qué respuesta se disparan y qué efecto tienen. -->
+      <p-accordion-panel value="especiales">
+        <p-accordion-header>
+          <app-seccion-header
+            icono="pi pi-bolt"
+            tono="rose"
+            titulo="Reglas especiales"
+            subtitulo="Casos que pesan más allá del cálculo"
+            [resumen]="resumenEspeciales()"
+          />
+        </p-accordion-header>
+        <p-accordion-content>
+          <div class="pl-0 sm:pl-6">
+          <div class="flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+            <p class="text-color-secondary m-0">
+              No suman puntaje a un factor: actúan sobre el resultado ya calculado. Por ejemplo, un reporte donde
+              alguien se sintió mal, o uno que viene de una escuela o un hospital.
+            </p>
+            @if (puedeEditar) {
+              <p-button
+                label="Agregar regla"
+                icon="pi pi-plus"
+                [rounded]="true"
+                [outlined]="true"
+                size="small"
+                (onClick)="agregarReglaEspecial()"
+              />
+            }
+          </div>
+
+          <div class="flex flex-column gap-3">
+            @for (grupo of reglasEspeciales.controls; track $index) {
+              <div class="flex flex-column gap-3 pt-3 border-top-1 surface-border" [formGroup]="reglaEspecialDe($index)">
+                <div class="grid formgrid">
+                  <div class="col-12 md:col-6 field">
+                    <label [for]="'regla-nombre-' + $index" class="block text-sm font-medium mb-2">
+                      Nombre de la regla
+                    </label>
+                    <input
+                      pInputText
+                      [id]="'regla-nombre-' + $index"
+                      formControlName="nombre"
+                      placeholder="Ej.: Prioridad si alguien se sintió mal"
+                      [readonly]="!puedeEditar"
+                      [fluid]="true"
+                    />
+                  </div>
+
+                  <div class="col-12 md:col-6 field">
+                    <div class="flex align-items-center justify-content-between gap-2">
+                      <label [for]="'regla-pregunta-' + $index" class="block text-sm font-medium mb-2">
+                        Se activa con esta pregunta
+                      </label>
+                      @if (puedeEditar) {
+                        <p-button
+                          icon="pi pi-trash"
+                          label="Quitar"
+                          [text]="true"
+                          [rounded]="true"
+                          severity="danger"
+                          size="small"
+                          (onClick)="quitarReglaEspecial($index)"
+                        />
+                      }
+                    </div>
+                    <p-select
+                      [inputId]="'regla-pregunta-' + $index"
+                      formControlName="preguntaCodigo"
+                      [options]="preguntasDisponibles()"
+                      optionLabel="label"
+                      optionValue="value"
+                      placeholder="Elegí una pregunta"
+                      [filter]="true"
+                      filterBy="label"
+                      [disabled]="!puedeEditar"
+                      [fluid]="true"
+                      (onChange)="reiniciarOpcionesEspecial($index)"
+                    />
+                    @if (reglaEspecialColgada($index)) {
+                      <small class="text-red-500">
+                        La pregunta que tenía elegida ya no está en la encuesta activa: elegí otra.
+                      </small>
+                    }
+                  </div>
+
+                  <div class="col-12 md:col-5 field">
+                    <label [for]="'regla-opciones-' + $index" class="block text-sm font-medium mb-2">
+                      Cuando respondan
+                    </label>
+                    <p-multiselect
+                      [inputId]="'regla-opciones-' + $index"
+                      formControlName="opcionCodigos"
+                      [options]="opcionesDeReglaEspecial($index)"
+                      optionLabel="label"
+                      optionValue="value"
+                      placeholder="Elegí una o más respuestas"
+                      display="chip"
+                      [disabled]="!puedeEditar"
+                      [fluid]="true"
+                    />
+                  </div>
+
+                  <div class="col-12 md:col-4 field">
+                    <label [for]="'regla-efecto-' + $index" class="block text-sm font-medium mb-2">Entonces</label>
+                    <p-select
+                      [inputId]="'regla-efecto-' + $index"
+                      formControlName="efecto"
+                      [options]="efectos"
+                      optionLabel="label"
+                      optionValue="value"
+                      [disabled]="!puedeEditar"
+                      [fluid]="true"
+                      (onChange)="ajustarValorAlEfecto($index)"
+                    />
+                  </div>
+
+                  <div class="col-12 md:col-3 field">
+                    <label [for]="'regla-valor-' + $index" class="block text-sm font-medium mb-2">
+                      {{ reglaEspecialDe($index).getRawValue().efecto === 'nivelMinimo' ? 'Nivel' : 'Puntos' }}
+                    </label>
+                    <p-inputnumber
+                      [inputId]="'regla-valor-' + $index"
+                      formControlName="valor"
+                      mode="decimal"
+                      [min]="limitesValor($index).min"
+                      [max]="limitesValor($index).max"
+                      [step]="limitesValor($index).paso"
+                      [maxFractionDigits]="2"
+                      [showButtons]="true"
+                      [fluid]="true"
+                      [disabled]="!puedeEditar"
+                    />
+                    <small class="text-color-secondary">{{ limitesValor($index).ayuda }}</small>
+                  </div>
+                </div>
+              </div>
+            } @empty {
+              <span class="text-color-secondary text-sm">
+                No hay reglas especiales: la criticidad y el nivel salen solo del cálculo de los factores.
+              </span>
+            }
+          </div>
+        </div>
+        </p-accordion-content>
+      </p-accordion-panel>
+
+      <!-- 5. Detección y anti-abuso -->
+      <p-accordion-panel value="deteccion">
+        <p-accordion-header>
+          <app-seccion-header
+            icono="pi pi-map-marker"
+            tono="teal"
+            titulo="Detección geográfica y límites"
+            subtitulo="Qué tan cerca y en cuánto tiempo cuentan dos reportes"
+            [resumen]="resumenDeteccion()"
+          />
+        </p-accordion-header>
+        <p-accordion-content>
+          <div class="pl-0 sm:pl-6">
+          <!-- Dos grupos, porque son dos cosas distintas que comparten sección: qué
+               agrupa reportes en el mapa, y cuánto puede reportar un teléfono. Cada
+               fila se reparte por igual y llega al borde. -->
+          <div class="barra-factor flex align-items-center px-3 py-2 border-round mb-3">
+            <span class="font-semibold text-color">Detección geográfica</span>
+          </div>
+
+          <div class="flex flex-column md:flex-row gap-3 mb-4">
+            <div class="flex-1">
+              <label for="radioMetros" class="block text-sm font-medium mb-2">Radio (metros)</label>
+              <p-inputnumber
+                inputId="radioMetros"
+                formControlName="radioMetros"
+                mode="decimal"
+                [min]="1"
+                [step]="50"
+                [useGrouping]="false"
+                [showButtons]="true"
+                [fluid]="true"
+              />
+              <small class="text-color-secondary">Distancia para considerar dos reportes "cercanos".</small>
+            </div>
+
+            <div class="flex-1">
+              <label for="ventanaDias" class="block text-sm font-medium mb-2">Ventana (días)</label>
+              <p-inputnumber
+                inputId="ventanaDias"
+                formControlName="ventanaDias"
+                mode="decimal"
+                [min]="1"
+                [showButtons]="true"
+                [fluid]="true"
+              />
+              <small class="text-color-secondary">Durante cuántos días dos reportes cercanos se cuentan juntos.</small>
+            </div>
+
+            <div class="flex-1">
+              <label for="minReportes" class="block text-sm font-medium mb-2">Mínimo de reportes</label>
+              <p-inputnumber
+                inputId="minReportes"
+                formControlName="minReportes"
+                mode="decimal"
+                [min]="1"
+                [showButtons]="true"
+                [fluid]="true"
+              />
+              <small class="text-color-secondary">Cuántos reportes cercanos hacen falta para marcar un punto crítico.</small>
+            </div>
+          </div>
+
+          <div class="barra-factor flex align-items-center px-3 py-2 border-round mb-3">
+            <span class="font-semibold text-color">Límites anti-abuso</span>
+          </div>
+
+          <div class="flex flex-column md:flex-row gap-3" formGroupName="limitesAntiabuso">
+            <div class="flex-1">
+              <label for="otpPorHora" class="block text-sm font-medium mb-2">Códigos de verificación por hora</label>
+              <p-inputnumber
+                inputId="otpPorHora"
+                formControlName="otpPorHora"
+                mode="decimal"
+                [min]="1"
+                [showButtons]="true"
+                [fluid]="true"
+              />
+              <small class="text-color-secondary">Por número de teléfono.</small>
+            </div>
+
+            <div class="flex-1">
+              <label for="reportesPor24h" class="block text-sm font-medium mb-2">Reportes por 24 h</label>
+              <p-inputnumber
+                inputId="reportesPor24h"
+                formControlName="reportesPor24h"
+                mode="decimal"
+                [min]="1"
+                [showButtons]="true"
+                [fluid]="true"
+              />
+              <small class="text-color-secondary">
+                Cuenta juntos los reportes enviados desde la web y desde las aplicaciones de mensajería.
+              </small>
+            </div>
+          </div>
+        </div>
+        </p-accordion-content>
+      </p-accordion-panel>
+    </p-accordion>
+  </form>
+}

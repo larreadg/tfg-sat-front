@@ -1,0 +1,23 @@
+<div class="seccion-header flex align-items-center gap-3 w-full" [class]="'tono-' + tono()">
+  <span class="caja-icono flex align-items-center justify-content-center flex-shrink-0">
+    <i [class]="icono()" aria-hidden="true"></i>
+  </span>
+
+  <span class="flex flex-column gap-1 flex-grow-1 min-w-0">
+    <span class="titulo-seccion">{{ titulo() }}</span>
+    @if (subtitulo()) {
+      <!-- En mobile el header se queda con ícono + título: el subtítulo es contexto,
+           y apretarlo en dos líneas contra el resumen dejaría el header ilegible. -->
+      <span class="subtitulo-seccion hidden md:block text-sm">{{ subtitulo() }}</span>
+    }
+  </span>
+
+  @if (resumen()) {
+    <p-tag
+      [value]="resumen()"
+      [severity]="severidadResumen()"
+      [rounded]="true"
+      styleClass="flex-shrink-0 white-space-nowrap"
+    />
+  }
+</div>

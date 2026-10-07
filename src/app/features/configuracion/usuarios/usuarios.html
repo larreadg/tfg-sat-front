@@ -1,0 +1,180 @@
+<p-confirmdialog />
+
+<div class="flex flex-column gap-3">
+  <!-- Filtros colapsables. "Nuevo" queda FUERA del panel: es la acción
+       principal de la pantalla y no puede esconderse al colapsar. -->
+  <div class="flex align-items-start gap-2">
+    <app-filtros-panel class="flex-1" [resumen]="filtrosAplicados()">
+      <div class="grid formgrid">
+        <div class="col-12 md:col-6 field mb-0">
+          <label for="busqueda" class="block text-sm font-medium mb-2">Buscar</label>
+          <p-iconfield>
+            <p-inputicon class="pi pi-search" />
+            <input
+              pInputText
+              id="busqueda"
+              [(ngModel)]="busqueda"
+              (keyup.enter)="aplicar()"
+              placeholder="Nombre, apellido, documento o correo"
+              [fluid]="true"
+            />
+          </p-iconfield>
+        </div>
+
+        <div class="col-12 md:col-6 field mb-0">
+          <label for="estado" class="block text-sm font-medium mb-2">Estado</label>
+          <p-select
+            inputId="estado"
+            [(ngModel)]="estado"
+            [options]="estadoOpciones"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Todos"
+            [fluid]="true"
+          />
+        </div>
+
+        <div
+          class="col-12 flex flex-column sm:flex-row justify-content-end align-items-stretch sm:align-items-center gap-2 mt-3"
+        >
+          <p-button
+            label="Limpiar"
+            icon="pi pi-filter-slash"
+            [text]="true"
+            [rounded]="true"
+            severity="secondary"
+            (onClick)="limpiar()"
+          />
+          <p-button label="Aplicar" icon="pi pi-filter" [rounded]="true" (onClick)="aplicar()" />
+        </div>
+      </div>
+    </app-filtros-panel>
+
+    @if (puedeCrear) {
+      <p-button label="Nuevo" icon="pi pi-plus" [rounded]="true" (onClick)="nuevo()" />
+    }
+  </div>
+
+  @if (error()) {
+    <p-message severity="error" styleClass="w-full">
+      <div class="flex align-items-center justify-content-between gap-3 w-full">
+        <span>No se pudieron cargar los usuarios.</span>
+        <p-button label="Reintentar" icon="pi pi-refresh" [text]="true" [rounded]="true" (onClick)="reintentar()" />
+      </div>
+    </p-message>
+  }
+
+  <!-- `min-width` + el scroll propio del p-table: la tabla scrollea adentro,
+       la página nunca queda con scroll horizontal en mobile. -->
+  <p-table
+    [value]="loading() ? filasSkeleton : usuarios()"
+    [tableStyle]="{ 'min-width': '52rem' }"
+    [rowHover]="true"
+    [loading]="trabajando()"
+  >
+    <ng-template #header>
+      <tr>
+        <th>Nombre</th>
+        <th>Documento</th>
+        <th>Correo</th>
+        <th>Teléfono</th>
+        <th>Roles</th>
+        <th style="width: 7rem">Estado</th>
+        <th style="width: 8rem"></th>
+      </tr>
+    </ng-template>
+
+    <ng-template #body let-u>
+      <tr>
+        @if (loading()) {
+          <td colspan="7"><p-skeleton height="1.5rem" /></td>
+        } @else {
+          <td class="font-medium">
+            {{ u.persona.nombres }} {{ u.persona.apellidos }}
+            @if (esUsuarioPropio(u)) {
+              <p-tag value="Vos" severity="info" [rounded]="true" styleClass="ml-2" />
+            }
+          </td>
+          <td class="white-space-nowrap">{{ u.persona.documento }}</td>
+          <td>{{ u.correoElectronico }}</td>
+          <td class="white-space-nowrap">{{ u.telefono }}</td>
+          <td>
+            @if (u.roles.length > 0) {
+              <div class="flex flex-wrap gap-1">
+                @for (rol of u.roles; track rol.id) {
+                  <p-tag [value]="rol.nombre" severity="secondary" [rounded]="true" />
+                }
+              </div>
+            } @else {
+              <span class="text-color-secondary">Sin roles</span>
+            }
+          </td>
+          <td>
+            <p-tag
+              [value]="u.activo ? 'Activo' : 'Inactivo'"
+              [severity]="u.activo ? 'success' : 'danger'"
+              [rounded]="true"
+            />
+          </td>
+          <td class="text-right white-space-nowrap">
+            @if (puedeEditar) {
+              <p-button
+                icon="pi pi-pencil"
+                [text]="true"
+                [rounded]="true"
+                severity="secondary"
+                size="small"
+                pTooltip="Editar"
+                tooltipPosition="left"
+                ariaLabel="Editar usuario"
+                (onClick)="editar(u)"
+              />
+            }
+            @if (puedeEliminar) {
+              <p-button
+                icon="pi pi-trash"
+                [text]="true"
+                [rounded]="true"
+                severity="danger"
+                size="small"
+                [disabled]="esUsuarioPropio(u)"
+                [pTooltip]="esUsuarioPropio(u) ? 'No podés eliminar tu propio usuario' : 'Eliminar'"
+                tooltipPosition="left"
+                ariaLabel="Eliminar usuario"
+                (onClick)="eliminar(u)"
+              />
+            }
+          </td>
+        }
+      </tr>
+    </ng-template>
+
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="7">
+          <div class="flex flex-column align-items-center gap-2 py-5">
+            <i class="pi pi-users text-color-secondary" style="font-size: 2rem"></i>
+            <span class="text-color-secondary">No hay usuarios que coincidan con el filtro.</span>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+
+  @if (total() > pageSize()) {
+    <p-paginator
+      [first]="first()"
+      [rows]="pageSize()"
+      [totalRecords]="total()"
+      [rowsPerPageOptions]="[10, 20, 50]"
+      (onPageChange)="onPage($event)"
+    />
+  }
+</div>
+
+<app-usuario-form
+  [(visible)]="formVisible"
+  [usuario]="usuarioEnEdicion()"
+  [roles]="roles()"
+  (guardado)="onGuardado()"
+/>

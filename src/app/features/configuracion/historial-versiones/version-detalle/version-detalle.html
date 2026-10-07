@@ -1,0 +1,227 @@
+<p-dialog
+  [visible]="visible()"
+  (visibleChange)="visible.set($event)"
+  [modal]="true"
+  [draggable]="false"
+  [dismissableMask]="true"
+  [style]="{ width: '58rem' }"
+  [breakpoints]="{ '960px': '95vw' }"
+>
+  <ng-template #header>
+    @if (configuracion(); as c) {
+      <div class="flex align-items-center gap-2">
+        <span class="text-lg font-semibold">Versión {{ c.version }}</span>
+        @if (c.activa) {
+          <p-tag value="Activa" severity="success" [rounded]="true" />
+        } @else {
+          <p-tag value="Histórica" severity="secondary" [rounded]="true" />
+        }
+      </div>
+    }
+  </ng-template>
+
+  @if (configuracion(); as c) {
+    <div class="flex flex-column gap-3">
+      <div class="flex flex-wrap align-items-center gap-3 text-sm text-color-secondary">
+        <span class="inline-flex align-items-center gap-2">
+          <i class="pi pi-calendar"></i>{{ c.fechaCreacion | date: 'dd/MM/yy HH:mm' }}
+        </span>
+        <span class="inline-flex align-items-center gap-2">
+          <i class="pi pi-user"></i>{{ c.autor?.nombreCompleto ?? 'Configuración inicial' }}
+        </span>
+      </div>
+
+      @if (!pesosSuman()) {
+        <p-message severity="warn" styleClass="w-full">
+          <span class="text-sm">
+            Los pesos de esta versión suman {{ sumaPesos() | number: '1.2-2' }} en lugar de 1.
+          </span>
+        </p-message>
+      }
+
+      <div class="grid">
+        <!-- Pesos de los factores -->
+        <div class="col-12 lg:col-6">
+          <span class="block text-sm font-medium mb-2">Pesos de los factores</span>
+          <p-table [value]="pesos()" styleClass="p-datatable-sm" [tableStyle]="{ 'min-width': '18rem' }">
+            <ng-template #body let-fila>
+              <tr>
+                <td>{{ fila.etiqueta }}</td>
+                <td class="text-right white-space-nowrap" style="width: 6rem">
+                  {{ fila.valor | number: '1.2-2' }}
+                </td>
+              </tr>
+            </ng-template>
+            <ng-template #footer>
+              <tr>
+                <td class="font-medium">Total</td>
+                <td class="text-right font-medium">{{ sumaPesos() | number: '1.2-2' }}</td>
+              </tr>
+            </ng-template>
+          </p-table>
+        </div>
+
+        <!-- Umbrales de nivel -->
+        <div class="col-12 lg:col-6">
+          <span class="block text-sm font-medium mb-2">Umbrales de nivel</span>
+          <p-table
+            [value]="[c.umbralesNivel]"
+            styleClass="p-datatable-sm"
+            [tableStyle]="{ 'min-width': '18rem' }"
+          >
+            <ng-template #body let-u>
+              <tr>
+                <td>{{ nivelLabel(1) }} desde</td>
+                <td class="text-right" style="width: 6rem">{{ u.n1 | number: '1.2-2' }}</td>
+              </tr>
+              <tr>
+                <td>{{ nivelLabel(2) }} desde</td>
+                <td class="text-right">{{ u.n2 | number: '1.2-2' }}</td>
+              </tr>
+              <tr>
+                <td>{{ nivelLabel(3) }} desde</td>
+                <td class="text-right">{{ u.n3 | number: '1.2-2' }}</td>
+              </tr>
+            </ng-template>
+            <ng-template #footer>
+              <tr>
+                <td>Bonus por zona vulnerable</td>
+                <td class="text-right">{{ c.bonusVulnerable | number: '1.2-2' }}</td>
+              </tr>
+            </ng-template>
+          </p-table>
+        </div>
+
+        <!-- Detección geográfica y anti-abuso -->
+        <div class="col-12">
+          <span class="block text-sm font-medium mb-2">Detección geográfica y anti-abuso</span>
+          <div class="grid">
+            <div class="col-6 md:col-4 lg:col-2">
+              <div class="flex flex-column gap-1 p-3 border-round surface-100">
+                <span class="text-xs text-color-secondary">Radio</span>
+                <span class="font-medium">{{ c.radioMetros }} m</span>
+              </div>
+            </div>
+            <div class="col-6 md:col-4 lg:col-2">
+              <div class="flex flex-column gap-1 p-3 border-round surface-100">
+                <span class="text-xs text-color-secondary">Ventana</span>
+                <span class="font-medium">{{ c.ventanaDias }} días</span>
+              </div>
+            </div>
+            <div class="col-6 md:col-4 lg:col-2">
+              <div class="flex flex-column gap-1 p-3 border-round surface-100">
+                <span class="text-xs text-color-secondary">Mín. reportes</span>
+                <span class="font-medium">{{ c.minReportes }}</span>
+              </div>
+            </div>
+            <div class="col-6 md:col-4 lg:col-3">
+              <div class="flex flex-column gap-1 p-3 border-round surface-100">
+                <span class="text-xs text-color-secondary">Códigos de verificación por hora</span>
+                <span class="font-medium">{{ c.limitesAntiabuso.otpPorHora }}</span>
+              </div>
+            </div>
+            <div class="col-6 md:col-4 lg:col-3">
+              <div class="flex flex-column gap-1 p-3 border-round surface-100">
+                <span class="text-xs text-color-secondary">Reportes por 24 h</span>
+                <span class="font-medium">{{ c.limitesAntiabuso.reportesPor24h }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p-divider />
+
+      <span class="text-sm font-medium">Tablas de puntaje</span>
+
+      <div class="grid">
+        <!-- F1: tramos por cantidad de reportes cercanos -->
+        <div class="col-12 lg:col-6">
+          <span class="block text-sm text-color-secondary mb-2">F1 · Reportes cercanos</span>
+          <p-table [value]="tramosF1()" styleClass="p-datatable-sm" [tableStyle]="{ 'min-width': '18rem' }">
+            <ng-template #header>
+              <tr>
+                <th>Reportes en el radio</th>
+                <th class="text-right" style="width: 6rem">Puntaje</th>
+              </tr>
+            </ng-template>
+            <ng-template #body let-tramo let-i="rowIndex">
+              <tr>
+                <td>{{ etiquetaTramo(tramo, i) }}</td>
+                <td class="text-right">{{ tramo.valor }}</td>
+              </tr>
+            </ng-template>
+          </p-table>
+        </div>
+
+        <!-- F4: viene del análisis de IA -->
+        <div class="col-12 lg:col-6">
+          <span class="block text-sm text-color-secondary mb-2">F4 · Análisis de IA</span>
+          <div class="flex flex-column gap-2 p-3 border-round surface-100">
+            <div class="flex justify-content-between gap-3">
+              <span class="text-color-secondary">Divisor</span>
+              <span class="font-medium">{{ c.puntajes.f4.divisor }}</span>
+            </div>
+            <span class="text-xs text-color-secondary">
+              El puntaje de riesgo que deja el análisis automático se divide por este valor.
+            </span>
+          </div>
+        </div>
+
+        <!-- Factores alimentados por el cuestionario. Qué pregunta puntúa cada uno
+             es dato de la configuración, así que se listan desde sus reglas. -->
+        @for (bloque of bloquesFactor(); track bloque.factor) {
+          <div class="col-12 lg:col-6">
+            <span class="block text-sm text-color-secondary mb-2">
+              {{ bloque.etiqueta }} · {{ bloque.modo }}, tope {{ bloque.tope }}
+            </span>
+            <div class="flex flex-column gap-3">
+              @for (regla of bloque.reglas; track regla.preguntaCodigo) {
+                <div class="flex flex-column gap-1">
+                  <span class="text-xs text-color-secondary">
+                    {{ regla.preguntaCodigo }}@if (regla.peso !== 1) { · peso {{ regla.peso }} }
+                  </span>
+                  <p-table [value]="regla.filas" styleClass="p-datatable-sm">
+                    <ng-template #body let-fila>
+                      <tr>
+                        <td>{{ fila.opcion }}</td>
+                        <td class="text-right" style="width: 6rem">{{ fila.puntaje }}</td>
+                      </tr>
+                    </ng-template>
+                  </p-table>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Reglas especiales: no suman a un factor, actúan sobre el resultado. -->
+        <div class="col-12">
+          <span class="block text-sm text-color-secondary mb-2">Reglas especiales</span>
+          <div class="flex flex-column gap-2 p-3 border-round surface-100">
+            @for (regla of reglasEspeciales(); track regla.nombre) {
+              <div class="flex justify-content-between gap-3 flex-wrap">
+                <span class="text-color-secondary">{{ regla.nombre }}</span>
+                <span class="font-medium">{{ resumirEfecto(regla) }}</span>
+              </div>
+            } @empty {
+              <span class="text-color-secondary">Esta versión no tenía reglas especiales.</span>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <ng-template #footer>
+    <p-button label="Cerrar" severity="secondary" [text]="true" [rounded]="true" (onClick)="cerrar()" />
+    @if (puedeUsarComoBase()) {
+      <p-button
+        label="Usar como base"
+        icon="pi pi-copy"
+        [rounded]="true"
+        (onClick)="emitirUsarComoBase()"
+      />
+    }
+  </ng-template>
+</p-dialog>

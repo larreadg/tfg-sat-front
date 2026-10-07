@@ -1,0 +1,270 @@
+<p-confirmdialog [style]="{ width: '28rem' }" />
+
+<div class="flex flex-column gap-3">
+  @if (cargando()) {
+    <p-skeleton height="2rem" borderRadius="8px" />
+    @for (s of skeletons; track $index) {
+      <p-skeleton height="3rem" borderRadius="8px" />
+    }
+  } @else if (error()) {
+    <div class="flex flex-column align-items-center gap-3 py-5 text-center">
+      <i class="pi pi-exclamation-triangle text-2xl text-color-secondary" aria-hidden="true"></i>
+      <span class="text-sm text-color-secondary">No se pudieron cargar las tareas.</span>
+      <p-button label="Reintentar" icon="pi pi-refresh" [text]="true" [rounded]="true" (onClick)="reintentar()" />
+    </div>
+  } @else {
+    <!-- Progreso -->
+    @if (resumen().total > 0) {
+      <div class="flex flex-column gap-2">
+        <div class="flex align-items-center justify-content-between gap-2 flex-wrap">
+          <span class="text-sm font-medium">
+            {{ resumen().completadas }} de {{ resumen().total }}
+            {{ resumen().total === 1 ? 'tarea completada' : 'tareas completadas' }}
+          </span>
+          <div class="inline-flex align-items-center gap-2">
+            @if (resumen().vencidas > 0) {
+              <p-tag
+                [value]="resumen().vencidas + (resumen().vencidas === 1 ? ' vencida' : ' vencidas')"
+                severity="danger"
+                icon="pi pi-clock"
+                [rounded]="true"
+              />
+            }
+            <span class="text-sm font-semibold">{{ resumen().porcentaje }}%</span>
+          </div>
+        </div>
+        <p-progressbar
+          [value]="resumen().porcentaje"
+          [showValue]="false"
+          [style]="{ height: '6px' }"
+          [ariaLabel]="'Progreso de las tareas: ' + resumen().porcentaje + '%'"
+        />
+      </div>
+    }
+
+    <!-- Lista. En reposo cada tarea son dos renglones: el título, y debajo sus
+         datos en letra chica. Los controles de responsable y fecha aparecen solo
+         al editar: tenerlos siempre visibles convertía cada fila en un
+         formulario y la lista dejaba de leerse. -->
+    <div class="flex flex-column">
+      @for (v of vista(); track v.tarea.id) {
+        @let t = v.tarea;
+        <div class="flex align-items-start gap-2 py-2 border-bottom-1 surface-border" [class.opacity-50]="estaEnCurso(t)">
+          <p-checkbox
+            [binary]="true"
+            [ngModel]="t.completada"
+            [disabled]="!puedeEscribir() || estaEnCurso(t)"
+            [inputId]="'tarea-' + t.id"
+            (onChange)="alternarCompletada(t, $event.checked)"
+          />
+
+          @if (editandoId() === t.id) {
+            <!-- Edición inline -->
+            <div class="flex flex-column gap-2 flex-grow-1 min-w-0">
+              <input
+                pInputText
+                [(ngModel)]="tituloEditado"
+                maxlength="300"
+                class="w-full"
+                [ariaLabel]="'Título de ' + t.titulo"
+                (keydown.enter)="guardarEdicion(t)"
+                (keydown.escape)="cancelarEdicion()"
+              />
+              <div class="flex flex-wrap align-items-center gap-2">
+                <p-select
+                  [options]="responsables()"
+                  [(ngModel)]="responsableEditado"
+                  optionLabel="nombreCompleto"
+                  optionValue="id"
+                  placeholder="Sin responsable"
+                  [showClear]="true"
+                  appendTo="body"
+                  styleClass="w-full sm:w-12rem"
+                  [ariaLabel]="'Responsable de ' + t.titulo"
+                />
+                <p-datepicker
+                  [(ngModel)]="vencimientoEditado"
+                  dateFormat="dd/mm/yy"
+                  [showIcon]="true"
+                  [showClear]="true"
+                  [readonlyInput]="true"
+                  placeholder="Sin fecha"
+                  appendTo="body"
+                  styleClass="w-full sm:w-12rem"
+                  [ariaLabel]="'Vencimiento de ' + t.titulo"
+                />
+                <div class="flex align-items-center gap-1 ml-auto">
+                  <p-button
+                    label="Guardar"
+                    icon="pi pi-check"
+                    [rounded]="true"
+                    size="small"
+                    [loading]="estaEnCurso(t)"
+                    (onClick)="guardarEdicion(t)"
+                  />
+                  <p-button
+                    label="Cancelar"
+                    [text]="true"
+                    [rounded]="true"
+                    size="small"
+                    severity="secondary"
+                    (onClick)="cancelarEdicion()"
+                  />
+                </div>
+              </div>
+            </div>
+          } @else {
+            <!-- Lectura -->
+            <div class="flex flex-column gap-1 flex-grow-1 min-w-0">
+              <label
+                [for]="'tarea-' + t.id"
+                class="text-sm cursor-pointer"
+                [class.line-through]="t.completada"
+                [class.text-color-secondary]="t.completada"
+              >
+                {{ t.titulo }}
+              </label>
+
+              <!-- Responsable y vencimiento como chips: son dos atributos de la
+                   tarea, no prosa. Quién la creó no se muestra: en una checklist
+                   de siete ítems cargados por la misma persona era una línea
+                   repetida que tapaba lo único que cambia entre tareas. -->
+              @if (t.responsable || t.fechaVencimiento) {
+                <div class="flex align-items-center gap-2 flex-wrap">
+                  @if (t.responsable) {
+                    <p-chip
+                      [label]="t.responsable.nombreCompleto"
+                      icon="pi pi-user"
+                      styleClass="text-xs"
+                    />
+                  }
+                  @if (t.fechaVencimiento) {
+                    @if (v.severidad === 'secondary') {
+                      <p-chip [label]="'Vence ' + v.vencimientoTexto" icon="pi pi-calendar" styleClass="text-xs" />
+                    } @else {
+                      <!-- Vencida o venciendo hoy: tag y no chip, porque acá el
+                           dato pide atención en vez de solo describir. -->
+                      <p-tag
+                        [value]="v.severidad === 'danger' ? 'Venció el ' + v.vencimientoTexto : 'Vence hoy'"
+                        [severity]="v.severidad"
+                        icon="pi pi-clock"
+                        [rounded]="true"
+                      />
+                    }
+                  }
+                </div>
+              }
+            </div>
+
+            @if (puedeEscribir()) {
+              <div class="inline-flex align-items-center gap-1 flex-shrink-0">
+                <p-button
+                  icon="pi pi-pencil"
+                  [text]="true"
+                  [rounded]="true"
+                  size="small"
+                  severity="secondary"
+                  [disabled]="estaEnCurso(t)"
+                  [ariaLabel]="'Editar ' + t.titulo"
+                  pTooltip="Editar"
+                  tooltipPosition="left"
+                  (onClick)="empezarEdicion(t)"
+                />
+                <p-button
+                  icon="pi pi-trash"
+                  [text]="true"
+                  [rounded]="true"
+                  size="small"
+                  severity="danger"
+                  [disabled]="estaEnCurso(t)"
+                  [ariaLabel]="'Eliminar ' + t.titulo"
+                  pTooltip="Eliminar"
+                  tooltipPosition="left"
+                  (onClick)="confirmarEliminar(t)"
+                />
+              </div>
+            }
+          }
+        </div>
+      } @empty {
+        <div class="flex flex-column align-items-center gap-2 py-4 text-center">
+          <i class="pi pi-check-square text-2xl text-color-secondary" aria-hidden="true"></i>
+          <span class="font-medium">Sin tareas todavía</span>
+          <span class="text-sm text-color-secondary">
+            @if (puedeEscribir()) {
+              Anotá qué hay que hacer con esta alerta y quién se encarga.
+            } @else {
+              Cuando alguien cargue pendientes, los vas a ver acá.
+            }
+          </span>
+        </div>
+      }
+    </div>
+
+    <!-- Alta: una sola línea. Escribir el título y Enter alcanza; el responsable
+         y la fecha se despliegan solo si hacen falta, porque la mayoría de las
+         tareas se anotan al vuelo y completar tres campos para cada una cansa. -->
+    @if (puedeEscribir()) {
+      <div class="flex flex-column gap-2">
+        <div class="flex align-items-center gap-2">
+          <i class="pi pi-plus text-color-secondary" aria-hidden="true"></i>
+          <input
+            pInputText
+            [(ngModel)]="tituloNuevo"
+            maxlength="300"
+            class="w-full"
+            placeholder="Agregar una tarea y presionar Enter…"
+            aria-label="Título de la tarea nueva"
+            (keydown.enter)="agregar()"
+            (focus)="mostrarOpciones.set(true)"
+          />
+          <p-button
+            icon="pi pi-arrow-right"
+            [rounded]="true"
+            size="small"
+            [loading]="guardando()"
+            [disabled]="!tituloNuevo.trim()"
+            ariaLabel="Agregar tarea"
+            pTooltip="Agregar"
+            tooltipPosition="left"
+            (onClick)="agregar()"
+          />
+        </div>
+
+        @if (mostrarOpciones()) {
+          <div class="flex flex-wrap align-items-center gap-2 pl-4">
+            <p-select
+              [(ngModel)]="responsableNuevo"
+              [options]="responsables()"
+              optionLabel="nombreCompleto"
+              optionValue="id"
+              placeholder="Sin responsable"
+              [showClear]="true"
+              appendTo="body"
+              styleClass="w-full sm:w-12rem"
+              ariaLabel="Responsable de la tarea nueva"
+            />
+            <p-datepicker
+              [(ngModel)]="vencimientoNuevo"
+              dateFormat="dd/mm/yy"
+              [showIcon]="true"
+              [showClear]="true"
+              [readonlyInput]="true"
+              [minDate]="hoy"
+              placeholder="Sin vencimiento"
+              appendTo="body"
+              styleClass="w-full sm:w-12rem"
+              ariaLabel="Vencimiento de la tarea nueva"
+            />
+          </div>
+        }
+      </div>
+    } @else {
+      <p-message
+        severity="secondary"
+        text="Podés ver las tareas, pero no tenés permiso para modificarlas."
+        styleClass="w-full"
+      />
+    }
+  }
+</div>

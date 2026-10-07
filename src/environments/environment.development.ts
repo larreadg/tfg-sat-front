@@ -1,5 +1,7 @@
 export const environment = {
-  apiUrl: 'http://localhost:3000',
-  appName: 'PatiñoAlert',
+  apiUrl: 'https://192.168.100.6:3000',
+  // Sitekey del widget de Cloudflare para desarrollo.
+  turnstileSiteKey: '1x00000000000000000000AA',
+  appName: 'AGUARD',
   appVersion: 'v1.0.0'
 };

@@ -1,0 +1,123 @@
+<div class="flex flex-column gap-3">
+  <p class="text-color-secondary m-0">
+    Cada cambio del motor de criticidad crea una versión nueva y desactiva la anterior. Las versiones viejas no se
+    editan ni se reactivan: los reportes ya calculados siguen apuntando a la versión con la que se evaluaron.
+  </p>
+
+  @if (error()) {
+    <p-message severity="error" styleClass="w-full">
+      <div class="flex align-items-center justify-content-between gap-3 w-full">
+        <span>No se pudo cargar el historial.</span>
+        <p-button label="Reintentar" icon="pi pi-refresh" [text]="true" [rounded]="true" (onClick)="reintentar()" />
+      </div>
+    </p-message>
+  }
+
+  <!-- `min-width` + el scroll propio del p-table: la tabla scrollea adentro,
+       la página nunca queda con scroll horizontal en mobile. -->
+  <p-table
+    [value]="loading() ? filasSkeleton : versiones()"
+    [tableStyle]="{ 'min-width': '58rem' }"
+    [rowHover]="true"
+  >
+    <ng-template #header>
+      <tr>
+        <th style="width: 7rem">Versión</th>
+        <th style="width: 9rem">Fecha</th>
+        <th>Autor</th>
+        <th style="width: 12rem">Pesos F1–F5</th>
+        <th style="width: 11rem">Umbrales</th>
+        <th style="width: 12rem">Radio / días / mín. reportes</th>
+        <th style="width: 9rem"></th>
+      </tr>
+    </ng-template>
+
+    <ng-template #body let-v>
+      <tr>
+        @if (loading()) {
+          <td colspan="7"><p-skeleton height="1.5rem" /></td>
+        } @else {
+          <td class="white-space-nowrap">
+            <span class="font-medium">v{{ v.version }}</span>
+            @if (v.activa) {
+              <p-tag value="Activa" severity="success" [rounded]="true" styleClass="ml-2" />
+            }
+          </td>
+          <td class="white-space-nowrap">{{ v.fechaCreacion | date: 'dd/MM/yy HH:mm' }}</td>
+          <td>
+            @if (v.autor) {
+              <span [pTooltip]="v.autor.correoElectronico" tooltipPosition="left">{{ v.autor.nombreCompleto }}</span>
+            } @else {
+              <span class="text-color-secondary">Configuración inicial</span>
+            }
+          </td>
+          <td class="white-space-nowrap text-sm">{{ resumenPesos(v) }}</td>
+          <td class="white-space-nowrap text-sm">
+            {{ v.umbralesNivel.n1 | number: '1.2-2' }} /
+            {{ v.umbralesNivel.n2 | number: '1.2-2' }} /
+            {{ v.umbralesNivel.n3 | number: '1.2-2' }}
+          </td>
+          <td class="white-space-nowrap text-sm">
+            {{ v.radioMetros }} m / {{ v.ventanaDias }} d / {{ v.minReportes }}
+          </td>
+          <td class="text-right white-space-nowrap">
+            <p-button
+              icon="pi pi-eye"
+              [text]="true"
+              [rounded]="true"
+              severity="secondary"
+              size="small"
+              pTooltip="Ver detalle"
+              tooltipPosition="left"
+              ariaLabel="Ver detalle de la versión"
+              (onClick)="verDetalle(v)"
+            />
+            @if (puedeEditar) {
+              <p-button
+                icon="pi pi-copy"
+                [text]="true"
+                [rounded]="true"
+                severity="secondary"
+                size="small"
+                pTooltip="Usar como base para una versión nueva"
+                tooltipPosition="left"
+                ariaLabel="Usar como base"
+                (onClick)="usarComoBase(v)"
+              />
+            }
+          </td>
+        }
+      </tr>
+    </ng-template>
+
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="7">
+          <div class="flex flex-column align-items-center gap-2 py-5">
+            <i class="pi pi-history text-color-secondary" style="font-size: 2rem"></i>
+            <span class="text-color-secondary">
+              Todavía no hay versiones. Se crea una cada vez que se guardan cambios en el motor de criticidad.
+            </span>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+
+  @if (total() > pageSize()) {
+    <p-paginator
+      [first]="first()"
+      [rows]="pageSize()"
+      [totalRecords]="total()"
+      [rowsPerPageOptions]="[10, 20, 50]"
+      (onPageChange)="onPage($event)"
+    />
+  }
+</div>
+
+<app-version-detalle
+  [(visible)]="detalleVisible"
+  [configuracion]="versionSeleccionada()"
+  [puedeUsarComoBase]="puedeEditar"
+  (usarComoBase)="usarComoBase($event)"
+/>

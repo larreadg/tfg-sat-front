@@ -1,0 +1,172 @@
+<div class="flex flex-column gap-3">
+  @if (cargando()) {
+    <div class="flex flex-column gap-3">
+      @for (s of skeletons; track $index) {
+        <div class="flex gap-2 align-items-start">
+          <p-skeleton shape="circle" size="2.5rem" />
+          <p-skeleton height="4rem" borderRadius="12px" styleClass="flex-grow-1" />
+        </div>
+      }
+    </div>
+  } @else if (error()) {
+    <div class="flex flex-column align-items-center gap-3 py-5 text-center">
+      <i class="pi pi-exclamation-triangle text-2xl text-color-secondary" aria-hidden="true"></i>
+      <span class="text-sm text-color-secondary">No se pudo cargar el seguimiento.</span>
+      <p-button label="Reintentar" icon="pi pi-refresh" [text]="true" [rounded]="true" (onClick)="reintentar()" />
+    </div>
+  } @else {
+    <!-- Hilo con scroll propio: la caja para escribir queda siempre a la vista,
+         sin importar cuántos comentarios tenga la alerta. -->
+    <div #feed class="flex flex-column gap-3 overflow-y-auto pr-1" [style.max-height]="'clamp(18rem, 55vh, 44rem)'">
+      @if (hayMas()) {
+        <p-button
+          [label]="'Ver comentarios anteriores (' + (total() - comentarios().length) + ')'"
+          icon="pi pi-chevron-up"
+          [text]="true"
+          [rounded]="true"
+          size="small"
+          [loading]="cargandoMas()"
+          (onClick)="cargarMas()"
+        />
+      }
+
+      @for (v of vista(); track v.comentario.id) {
+        @if (v.encabezadoDia) {
+          <div class="flex justify-content-center">
+            <p-chip [label]="v.encabezadoDia" styleClass="text-xs" />
+          </div>
+        }
+
+        <!-- Bitácora, no chat: cada entrada ocupa el ancho disponible y todas se
+             alinean igual. Alternar los lados y recortar la burbuja a media
+             pantalla deja el texto apretado contra un margen vacío, y acá lo
+             que se lee son observaciones de trabajo, no mensajes sueltos. -->
+        <div class="flex gap-2 align-items-start">
+          <p-avatar
+            [label]="iniciales(v.comentario.autor.nombreCompleto)"
+            shape="circle"
+            size="normal"
+            [pTooltip]="v.comentario.autor.nombreCompleto"
+            tooltipPosition="left"
+          />
+
+          <div
+            class="flex flex-column gap-2 p-3 border-round-xl border-1 surface-border flex-grow-1 min-w-0"
+            [class.surface-100]="v.propio"
+            [class.surface-card]="!v.propio"
+          >
+            <div class="flex align-items-baseline justify-content-between gap-2 flex-wrap">
+              <span class="text-sm font-semibold">
+                {{ v.propio ? 'Vos' : v.comentario.autor.nombreCompleto }}
+              </span>
+              <span class="text-xs text-color-secondary">
+                {{ v.comentario.fechaCreacion | date: 'dd/MM/yy HH:mm' }}
+              </span>
+            </div>
+
+            <!-- Interpolado, nunca innerHTML: es texto que escribió una persona.
+                 Una línea por salto, así se respetan los párrafos sin CSS. -->
+            <div class="flex flex-column">
+              @for (linea of v.lineas; track $index) {
+                <p class="m-0 text-sm">{{ linea }}</p>
+              }
+            </div>
+
+            @if (v.comentario.adjuntos.length > 0) {
+              <div class="flex flex-wrap align-items-center gap-2">
+                @for (a of v.comentario.adjuntos; track a.id) {
+                  <app-adjunto-vista [adjunto]="a" [compacto]="true" />
+                }
+              </div>
+            }
+          </div>
+        </div>
+      } @empty {
+        <div class="flex flex-column align-items-center gap-2 py-5 text-center">
+          <i class="pi pi-comments text-2xl text-color-secondary" aria-hidden="true"></i>
+          <span class="font-medium">Todavía no hay seguimiento</span>
+          <span class="text-sm text-color-secondary">
+            @if (puedeEscribir()) {
+              Escribí el primer comentario para dejar constancia de lo que se hizo con esta alerta.
+            } @else {
+              Cuando alguien registre un avance, lo vas a ver acá.
+            }
+          </span>
+        </div>
+      }
+    </div>
+
+    <!-- Redacción -->
+    @if (puedeEscribir()) {
+      <form [formGroup]="form" (ngSubmit)="enviar()" class="flex flex-column gap-2 border-top-1 surface-border pt-3">
+        <textarea
+          pTextarea
+          formControlName="cuerpo"
+          rows="2"
+          [autoResize]="true"
+          maxlength="2000"
+          class="w-full"
+          placeholder="Escribí un avance, una observación o lo que resolvió el organismo…"
+          aria-label="Nuevo comentario de seguimiento"
+        ></textarea>
+
+        @if (archivos().length > 0) {
+          <div class="flex flex-wrap gap-2">
+            @for (archivo of archivos(); track archivo.name + $index) {
+              <p-chip
+                [label]="archivo.name + ' · ' + tamano(archivo.size)"
+                [removable]="true"
+                icon="pi pi-paperclip"
+                (onRemove)="quitarArchivo($index)"
+              />
+            }
+          </div>
+        }
+
+        <div class="flex align-items-center justify-content-between gap-2 flex-wrap">
+          <p-fileupload
+            #uploader
+            mode="basic"
+            name="archivos"
+            [customUpload]="true"
+            [multiple]="true"
+            [auto]="false"
+            [showUploadButton]="false"
+            [showCancelButton]="false"
+            [fileLimit]="maxCantidad"
+            [maxFileSize]="maxBytes"
+            [accept]="accept"
+            chooseIcon="pi pi-paperclip"
+            chooseLabel="Adjuntar"
+            [chooseButtonProps]="{ rounded: true, text: true, severity: 'secondary', size: 'small' }"
+            (onSelect)="alSeleccionar($event)"
+          >
+            <!-- Vacío a propósito: por defecto el modo básico escribe acá el
+                 nombre del archivo (o "No file chosen"), y los elegidos ya se
+                 muestran arriba como chips que se pueden quitar uno por uno. -->
+            <ng-template #filelabel></ng-template>
+          </p-fileupload>
+
+          <p-button
+            type="submit"
+            label="Comentar"
+            icon="pi pi-send"
+            [rounded]="true"
+            size="small"
+            [loading]="enviando()"
+          />
+        </div>
+
+        <span class="text-xs text-color-secondary">
+          Hasta {{ maxCantidad }} archivos de 10 MB: imágenes, PDF, Word o Excel.
+        </span>
+      </form>
+    } @else {
+      <p-message
+        severity="secondary"
+        text="Podés leer el seguimiento, pero no tenés permiso para comentar."
+        styleClass="w-full"
+      />
+    }
+  }
+</div>

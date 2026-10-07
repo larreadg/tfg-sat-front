@@ -1,0 +1,272 @@
+<!--
+  Pantalla completa: el editor es una pantalla de trabajo, no un diálogo de
+  confirmación. `closeOnEscape` apagado para no perder el borrador local de un
+  escapazo (el borrador vive solo en memoria hasta confirmar).
+-->
+<p-dialog
+  [(visible)]="visible"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [closeOnEscape]="false"
+  [blockScroll]="true"
+  [style]="{ width: '100vw', height: '100vh' }"
+  [contentStyle]="{ overflow: 'auto' }"
+>
+  <ng-template #header>
+    <div class="flex align-items-center gap-2 flex-wrap">
+      <i class="pi pi-file-edit text-color-secondary"></i>
+      <span class="font-semibold">{{ titulo() }}</span>
+      <p-tag value="Borrador" severity="warn" [rounded]="true" />
+    </div>
+  </ng-template>
+
+  @if (loading()) {
+    <div class="flex flex-column gap-3">
+      <p-skeleton height="4rem" borderRadius="8px" />
+      <p-skeleton height="16rem" borderRadius="8px" />
+    </div>
+  } @else if (error()) {
+    <div class="flex flex-column align-items-center gap-3 py-6 text-center">
+      <i class="pi pi-exclamation-triangle text-3xl text-color-secondary"></i>
+      <span class="font-medium">No se pudo cargar la versión de origen</span>
+      <p-button label="Reintentar" icon="pi pi-refresh" [rounded]="true" (onClick)="reintentar()" />
+    </div>
+  } @else if (borrador(); as b) {
+    <div class="flex flex-column gap-4">
+      <p-message
+        severity="info"
+        [text]="
+          esCreacion()
+            ? 'Estás armando una versión nueva. Nada se guarda hasta que confirmes abajo.'
+            : 'Estás editando un borrador. Los cambios se guardan todos juntos al confirmar.'
+        "
+      />
+
+      <!-- Identificación -->
+      <div class="grid formgrid">
+        <div class="col-12 md:col-6 field mb-0">
+          <label class="block text-sm font-medium mb-2">Nombre</label>
+          <input pInputText [(ngModel)]="b.nombre" maxlength="150" class="w-full" placeholder="Nombre de la versión" />
+        </div>
+        <div class="col-12 md:col-6 field mb-0">
+          <label class="block text-sm font-medium mb-2">
+            Descripción <span class="text-color-secondary font-normal">(opcional)</span>
+          </label>
+          <input
+            pInputText
+            [(ngModel)]="b.descripcion"
+            maxlength="500"
+            class="w-full"
+            placeholder="Para qué sirve esta versión"
+          />
+        </div>
+      </div>
+
+      <!-- Fotos -->
+      <div class="flex flex-column gap-2 surface-border border-1 border-round p-3">
+        <div class="flex align-items-center gap-2">
+          <i class="pi pi-images text-color-secondary"></i>
+          <span class="font-medium">Fotos del agua</span>
+          <p-tag value="Obligatorias" severity="contrast" [rounded]="true" />
+        </div>
+        <span class="text-sm text-color-secondary">
+          Todo reporte de esta versión tiene que traer fotos: sin ellas la revisión automática no tiene con qué
+          evaluar el agua. Lo que se configura es cuántas.
+        </span>
+        <div class="grid formgrid mt-1">
+          <div class="col-6 md:col-3 field mb-0">
+            <label class="block text-sm font-medium mb-2">Mínimo</label>
+            <p-inputnumber
+              [(ngModel)]="b.fotosMin"
+              [min]="1"
+              [max]="10"
+              [showButtons]="true"
+              styleClass="w-full"
+              inputStyleClass="w-full"
+            />
+          </div>
+          <div class="col-6 md:col-3 field mb-0">
+            <label class="block text-sm font-medium mb-2">Máximo</label>
+            <p-inputnumber
+              [(ngModel)]="b.fotosMax"
+              [min]="1"
+              [max]="10"
+              [showButtons]="true"
+              styleClass="w-full"
+              inputStyleClass="w-full"
+            />
+          </div>
+        </div>
+      </div>
+
+      @if (criticidadEnRiesgo().length > 0) {
+        <!-- Renombrar una pregunta puntuada es seguro (el motor la ubica por su
+             código, que se hereda). Quitarla no: su factor pierde ese aporte. -->
+        <p-message severity="warn">
+          <div class="flex flex-column gap-1">
+            <span class="text-sm">
+              Sacaste preguntas que el motor de criticidad usa para puntuar. Ese factor va a perder su aporte, y no
+              vas a poder activar esta versión hasta que el motor deje de usarlas.
+            </span>
+            <span class="text-sm text-color-secondary">
+              @for (p of criticidadEnRiesgo(); track p.codigo) {
+                {{ p.texto }}{{ $last ? '' : ' · ' }}
+              }
+            </span>
+          </div>
+        </p-message>
+      }
+
+      <!-- Preguntas -->
+      <div class="flex flex-column gap-3">
+        <div class="flex align-items-center justify-content-between gap-2 flex-wrap">
+          <span class="font-medium">Preguntas ({{ b.preguntas.length }})</span>
+          <p-button
+            label="Agregar pregunta"
+            icon="pi pi-plus"
+            size="small"
+            [rounded]="true"
+            [outlined]="true"
+            (onClick)="agregarPregunta()"
+          />
+        </div>
+
+        @for (p of b.preguntas; track p.clave; let i = $index, ultimo = $last) {
+          <div class="flex flex-column gap-3 surface-border border-1 border-round p-3">
+            <div class="flex align-items-center justify-content-between gap-2 flex-wrap">
+              <div class="flex align-items-center gap-2">
+                <span class="font-medium">Pregunta {{ i + 1 }}</span>
+                @if (p.usadaEnCriticidad) {
+                  <p-tag
+                    value="Puntúa criticidad"
+                    severity="info"
+                    [rounded]="true"
+                    pTooltip="La configuración activa del motor puntúa esta pregunta. Se identifica por su código, así que podés cambiarle el texto sin romper nada."
+                    tooltipPosition="left"
+                  />
+                }
+              </div>
+              <div class="inline-flex align-items-center gap-1">
+                <p-button
+                  icon="pi pi-arrow-up"
+                  size="small"
+                  [text]="true"
+                  [rounded]="true"
+                  severity="secondary"
+                  ariaLabel="Subir la pregunta"
+                  pTooltip="Subir"
+                  tooltipPosition="left"
+                  [disabled]="i === 0"
+                  (onClick)="moverPregunta(p.clave, -1)"
+                />
+                <p-button
+                  icon="pi pi-arrow-down"
+                  size="small"
+                  [text]="true"
+                  [rounded]="true"
+                  severity="secondary"
+                  ariaLabel="Bajar la pregunta"
+                  pTooltip="Bajar"
+                  tooltipPosition="left"
+                  [disabled]="ultimo"
+                  (onClick)="moverPregunta(p.clave, 1)"
+                />
+                <p-button
+                  icon="pi pi-trash"
+                  size="small"
+                  [text]="true"
+                  [rounded]="true"
+                  severity="danger"
+                  ariaLabel="Quitar la pregunta"
+                  pTooltip="Quitar"
+                  tooltipPosition="left"
+                  (onClick)="quitarPregunta(p.clave)"
+                />
+              </div>
+            </div>
+
+            <div class="grid formgrid">
+              <div class="col-12 md:col-8 field mb-0">
+                <label class="block text-sm font-medium mb-2">Texto</label>
+                <input pInputText [(ngModel)]="p.texto" maxlength="500" class="w-full" placeholder="¿Qué querés preguntar?" />
+              </div>
+              <div class="col-12 md:col-4 field mb-0">
+                <label class="block text-sm font-medium mb-2">Tipo</label>
+                <p-select
+                  [(ngModel)]="p.tipo"
+                  [options]="tipoOpciones"
+                  optionLabel="label"
+                  optionValue="value"
+                  styleClass="w-full"
+                />
+              </div>
+            </div>
+
+            <div class="flex flex-column gap-2">
+              <span class="text-sm font-medium">Opciones</span>
+              @for (o of p.opciones; track $index) {
+                <div class="flex align-items-center gap-2">
+                  <input
+                    pInputText
+                    [(ngModel)]="o.texto"
+                    maxlength="255"
+                    class="flex-1"
+                    [placeholder]="'Opción ' + ($index + 1)"
+                  />
+                  <p-button
+                    icon="pi pi-times"
+                    [text]="true"
+                    [rounded]="true"
+                    severity="secondary"
+                    ariaLabel="Quitar opción"
+                    [disabled]="p.opciones.length <= 2"
+                    (onClick)="quitarOpcion(p.clave, $index)"
+                  />
+                </div>
+              }
+              <div>
+                <p-button
+                  label="Agregar opción"
+                  icon="pi pi-plus"
+                  size="small"
+                  [text]="true"
+                  [rounded]="true"
+                  (onClick)="agregarOpcion(p.clave)"
+                />
+              </div>
+            </div>
+          </div>
+        } @empty {
+          <div class="flex align-items-center gap-2 text-sm text-color-secondary">
+            <i class="pi pi-info-circle"></i>
+            La versión no tiene preguntas. Agregá al menos una.
+          </div>
+        }
+      </div>
+
+      <span class="text-xs text-color-secondary">
+        El paso de fotos se agrega solo al final del formulario: no hace falta cargarlo como pregunta.
+      </span>
+    </div>
+  }
+
+  <ng-template #footer>
+    <p-button
+      label="Cancelar"
+      [text]="true"
+      [rounded]="true"
+      severity="secondary"
+      [disabled]="guardando()"
+      (onClick)="cerrar()"
+    />
+    <p-button
+      [label]="esCreacion() ? 'Crear versión' : 'Guardar borrador'"
+      icon="pi pi-check"
+      [rounded]="true"
+      [loading]="guardando()"
+      [disabled]="!borrador()"
+      (onClick)="confirmar()"
+    />
+  </ng-template>
+</p-dialog>

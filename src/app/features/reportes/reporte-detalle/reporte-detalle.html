@@ -1,0 +1,265 @@
+@if (loading()) {
+  <div class="flex flex-column gap-4">
+    <p-skeleton height="2.5rem" width="16rem" borderRadius="8px" />
+    <div class="grid">
+      <div class="col-12 lg:col-8">
+        <div class="flex flex-column gap-2">
+          @for (fila of filasSkeleton; track $index) {
+            <p-skeleton height="4rem" borderRadius="8px" />
+          }
+        </div>
+      </div>
+      <div class="col-12 lg:col-4">
+        <p-skeleton height="18rem" borderRadius="8px" />
+      </div>
+    </div>
+  </div>
+} @else if (error() || !reporte()) {
+  <p-card>
+    <div class="flex flex-column align-items-center gap-3 py-6 text-center">
+      <i class="pi pi-exclamation-triangle text-3xl text-color-secondary"></i>
+      <div class="flex flex-column gap-1">
+        <span class="font-medium">No se pudo cargar el reporte</span>
+        <span class="text-sm text-color-secondary">Puede que no exista o que haya un problema de conexión.</span>
+      </div>
+      <div class="flex gap-2">
+        <p-button label="Volver" icon="pi pi-arrow-left" [text]="true" [rounded]="true" (onClick)="volver()" />
+        <p-button label="Reintentar" icon="pi pi-refresh" [rounded]="true" (onClick)="reintentar()" />
+      </div>
+    </div>
+  </p-card>
+} @else if (reporte(); as r) {
+  <div class="flex flex-column gap-4">
+    <!-- Cabecera -->
+    <div class="flex align-items-center gap-3 flex-wrap">
+      <p-button
+        icon="pi pi-arrow-left"
+        [rounded]="true"
+        [text]="true"
+        severity="secondary"
+        ariaLabel="Volver a reportes"
+        pTooltip="Volver a reportes"
+        tooltipPosition="left"
+        (onClick)="volver()"
+      />
+      <div class="flex flex-column">
+        <h1 class="text-2xl font-semibold m-0">{{ r.codigoPublico }}</h1>
+        <span class="text-sm text-color-secondary">{{ r.fecha | date: 'dd/MM/yy HH:mm' }}</span>
+      </div>
+      <div class="flex align-items-center gap-2 ml-auto">
+        <app-nivel-tag [nivel]="r.nivelPreliminar" />
+        <app-estado-analisis-tag [estado]="estadoAnalisis()" />
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Columna principal -->
+      <div class="col-12 lg:col-8">
+        <div class="flex flex-column gap-4">
+          <!-- Datos generales -->
+          <p-card>
+            <div class="flex flex-column gap-3">
+              <div class="flex align-items-center gap-2">
+                <p-chip [label]="canalLabel(r.canal)" [icon]="canalIcono(r.canal)" />
+                <span class="text-sm text-color-secondary">
+                  {{ r.latitud | number: '1.5-5' }}, {{ r.longitud | number: '1.5-5' }}
+                </span>
+              </div>
+              <div class="flex flex-column gap-1">
+                <span class="text-sm font-medium text-color-secondary">Ubicación</span>
+                @if (ubicacion(); as resumen) {
+                  <div class="flex align-items-start gap-2">
+                    <i class="pi pi-map-marker text-color-secondary mt-1"></i>
+                    <div class="flex flex-column">
+                      <span class="font-medium">{{ resumen }}</span>
+                      @if (r.ubicacion?.direccion) {
+                        <span class="text-sm text-color-secondary" style="max-width: 65ch">
+                          {{ r.ubicacion?.direccion }}
+                        </span>
+                      }
+                    </div>
+                  </div>
+                } @else {
+                  <span class="text-sm text-color-secondary">
+                    Sin dirección resuelta para estas coordenadas.
+                  </span>
+                }
+              </div>
+              @if (r.descripcion) {
+                <div class="flex flex-column gap-1">
+                  <span class="text-sm font-medium text-color-secondary">Descripción del ciudadano</span>
+                  <p class="m-0" style="max-width: 65ch">{{ r.descripcion }}</p>
+                </div>
+              }
+              @if (r.telefono) {
+                <div class="flex align-items-center gap-2 pt-2 border-top-1 surface-border">
+                  <i class="pi pi-phone text-color-secondary"></i>
+                  <span class="font-medium">{{ r.telefono }}</span>
+                  <span class="text-xs text-color-secondary">(dato reservado)</span>
+                </div>
+              }
+            </div>
+          </p-card>
+
+          <!-- Respuestas del cuestionario -->
+          <p-card>
+            <ng-template #title>
+              <span class="text-base font-semibold">Cuestionario</span>
+            </ng-template>
+            @if (r.respuestas.length === 0) {
+              <span class="text-sm text-color-secondary">Sin respuestas registradas.</span>
+            } @else {
+              <div class="flex flex-column gap-3">
+                @for (resp of r.respuestas; track resp.preguntaId) {
+                  <div class="flex flex-column gap-1 pb-3 border-bottom-1 surface-border">
+                    <span class="text-sm text-color-secondary">{{ resp.pregunta }}</span>
+                    @if (resp.opciones.length > 0) {
+                      <div class="flex flex-wrap gap-2">
+                        @for (opcion of resp.opciones; track opcion) {
+                          <p-chip [label]="opcion" />
+                        }
+                      </div>
+                    } @else {
+                      <span class="text-sm">—</span>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </p-card>
+
+          <!-- Fotos -->
+          @if (r.fotos.length > 0) {
+            <p-card>
+              <ng-template #title>
+                <span class="text-base font-semibold">Fotos ({{ r.fotos.length }})</span>
+              </ng-template>
+              <div class="grid">
+                @for (foto of r.fotos; track foto.id) {
+                  <div class="col-12 sm:col-6">
+                    <div class="flex flex-column gap-2">
+                      <p-image
+                        [src]="urlFoto(foto.url)"
+                        [alt]="'Foto ' + foto.orden + ' del reporte'"
+                        [preview]="true"
+                        styleClass="w-full block"
+                        imageClass="w-full border-round-lg"
+                        [imageStyle]="{ 'object-fit': 'cover', 'aspect-ratio': '4 / 3', width: '100%' }"
+                      />
+                      @if (foto.descripcionIa) {
+                        <span class="text-xs text-color-secondary">{{ foto.descripcionIa }}</span>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            </p-card>
+          }
+        </div>
+      </div>
+
+      <!-- Columna lateral -->
+      <div class="col-12 lg:col-4">
+        <div class="flex flex-column gap-4">
+          <!-- Mini-mapa -->
+          <app-leaflet-map
+            [puntos]="puntos()"
+            [altura]="'240px'"
+            [interactivo]="false"
+            etiquetaAccesible="Ubicación del reporte en el mapa"
+          />
+
+          <!-- Criticidad + desglose -->
+          <p-card>
+            <ng-template #title>
+              <span class="text-base font-semibold">Criticidad</span>
+            </ng-template>
+            <div class="flex flex-column gap-3">
+              <div class="flex align-items-center justify-content-between">
+                <span class="text-sm text-color-secondary">Nivel de prioridad</span>
+                <app-nivel-tag [nivel]="r.nivelPreliminar" />
+              </div>
+              @if (r.criticidad != null) {
+                <div class="flex align-items-baseline gap-2">
+                  <span class="text-3xl font-semibold">{{ r.criticidad | number: '1.2-2' }}</span>
+                  <span class="text-xs text-color-secondary">puntaje combinado</span>
+                </div>
+              }
+
+              @if (factores().length > 0) {
+                <div class="flex flex-column gap-2 pt-2 border-top-1 surface-border">
+                  @for (factor of factores(); track factor.clave) {
+                    <div class="flex flex-column gap-1">
+                      <div class="flex align-items-center justify-content-between gap-2">
+                        <span class="text-sm">
+                          <span class="font-medium">{{ factor.clave }}</span>
+                          <span class="text-color-secondary"> · {{ factor.etiqueta }}</span>
+                        </span>
+                        <span class="text-sm font-medium">
+                          {{ factor.valor != null ? (factor.valor | number: '1.2-2') : 'N/D' }}
+                        </span>
+                      </div>
+                      <p-progressbar
+                        [value]="barraFactor(factor.valor)"
+                        [showValue]="false"
+                        [style]="{ height: '5px' }"
+                      />
+                    </div>
+                  }
+                  <span class="text-xs text-color-secondary pt-1">
+                    Los factores sin dato (N/D) no se tienen en cuenta: su peso se reparte entre los que sí tienen dato.
+                  </span>
+                </div>
+              }
+            </div>
+          </p-card>
+
+          <!-- Resultado del análisis IA -->
+          <p-card>
+            <ng-template #title>
+              <span class="text-base font-semibold">Análisis por IA</span>
+            </ng-template>
+            @if (reporte()?.evaluacion; as ev) {
+              <div class="flex flex-column gap-3">
+                <div class="flex align-items-center justify-content-between">
+                  <app-estado-analisis-tag [estado]="ev.estado" />
+                  @if (ev.riesgoScore != null) {
+                    <span class="text-sm text-color-secondary">
+                      Riesgo IA <span class="font-medium text-color">{{ ev.riesgoScore | number: '1.0-1' }}</span> / 5
+                    </span>
+                  }
+                </div>
+                @if (ev.resumen) {
+                  <div class="flex flex-column gap-1">
+                    <span class="text-sm font-medium text-color-secondary">Resumen</span>
+                    <p class="m-0 text-sm">{{ ev.resumen }}</p>
+                  </div>
+                }
+                @if (ev.justificacion) {
+                  <div class="flex flex-column gap-1">
+                    <span class="text-sm font-medium text-color-secondary">Justificación</span>
+                    <p class="m-0 text-sm">{{ ev.justificacion }}</p>
+                  </div>
+                }
+                @if (ev.recomendacion) {
+                  <div class="flex flex-column gap-1">
+                    <span class="text-sm font-medium text-color-secondary">Recomendación</span>
+                    <p class="m-0 text-sm">{{ ev.recomendacion }}</p>
+                  </div>
+                }
+                @if (ev.estado === 'ERROR' && ev.errorMensaje) {
+                  <p-message severity="error" size="small" variant="simple">{{ ev.errorMensaje }}</p-message>
+                }
+                @if (ev.modelo) {
+                  <span class="text-xs text-color-secondary">Revisión automática</span>
+                }
+              </div>
+            } @else {
+              <span class="text-sm text-color-secondary">El análisis todavía no se ejecutó para este reporte.</span>
+            }
+          </p-card>
+        </div>
+      </div>
+    </div>
+  </div>
+}

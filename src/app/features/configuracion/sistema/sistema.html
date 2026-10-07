@@ -1,0 +1,434 @@
+<div class="flex flex-column gap-4">
+  <p class="text-color-secondary m-0">
+    Arriba podés ver cómo está funcionando el sistema en este momento. Abajo se configura la cuenta de correo con
+    la que se envían los avisos.
+  </p>
+
+  @if (error()) {
+    <p-message severity="error" styleClass="w-full">
+      <div class="flex align-items-center justify-content-between gap-3 w-full">
+        <span>No se pudo cargar el estado del sistema.</span>
+        <p-button label="Reintentar" icon="pi pi-refresh" [text]="true" [rounded]="true" (onClick)="reintentar()" />
+      </div>
+    </p-message>
+  } @else if (loading()) {
+    <div class="grid">
+      @for (fila of filasSkeleton; track $index) {
+        <div class="col-12 md:col-6 lg:col-3">
+          <p-skeleton height="11rem" borderRadius="0.75rem" />
+        </div>
+      }
+    </div>
+    <p-skeleton height="22rem" borderRadius="0.75rem" />
+  } @else if (estado(); as sistema) {
+    <!-- ================= 1. Estado operativo (solo lectura) ================= -->
+    <section class="flex flex-column gap-3">
+      <div class="flex align-items-center gap-2 flex-wrap">
+        <i class="pi pi-server text-color-secondary"></i>
+        <h3 class="m-0 text-lg">Cómo está funcionando</h3>
+        <p-tag
+          [value]="entornoLabel()"
+          [severity]="sistema.entorno === 'production' ? 'danger' : 'secondary'"
+          [rounded]="true"
+        />
+        <p-tag
+          [value]="'Versión ' + sistema.version"
+          severity="secondary"
+          [rounded]="true"
+          [pTooltip]="'Versión del panel: ' + versionFront"
+          tooltipPosition="left"
+        />
+      </div>
+
+      <p-message severity="secondary" variant="simple" styleClass="w-full">
+        <span class="text-sm">
+          Estos datos son informativos: se muestran para que puedas verificar de un vistazo que todo esté como
+          corresponde. No se modifican desde el panel.
+        </span>
+      </p-message>
+
+      <div class="grid">
+        <!-- Canales de entrada -->
+        <div class="col-12 md:col-6 lg:col-3">
+          <p-card styleClass="h-full">
+            <ng-template #title>
+              <span class="text-base">Canales de reporte</span>
+            </ng-template>
+            <ng-template #subtitle>
+              <span class="text-sm">Por dónde puede entrar un reporte</span>
+            </ng-template>
+            <div class="flex flex-column gap-2">
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-sm">Web</span>
+                <p-tag
+                  [value]="sistema.canales.web ? 'Habilitado' : 'Deshabilitado'"
+                  [severity]="sistema.canales.web ? 'success' : 'secondary'"
+                  [rounded]="true"
+                />
+              </div>
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-sm">Telegram</span>
+                <p-tag
+                  [value]="sistema.canales.telegram ? 'Habilitado' : 'Deshabilitado'"
+                  [severity]="sistema.canales.telegram ? 'success' : 'secondary'"
+                  [rounded]="true"
+                />
+              </div>
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-sm">WhatsApp</span>
+                <p-tag
+                  [value]="sistema.canales.whatsapp ? 'Habilitado' : 'Sin integrar'"
+                  [severity]="sistema.canales.whatsapp ? 'success' : 'secondary'"
+                  [rounded]="true"
+                />
+              </div>
+            </div>
+          </p-card>
+        </div>
+
+        <!-- Job de IA -->
+        <div class="col-12 md:col-6 lg:col-3">
+          <p-card styleClass="h-full">
+            <ng-template #title>
+              <span class="text-base">Evaluación por IA</span>
+            </ng-template>
+            <ng-template #subtitle>
+              <span class="text-sm">Revisión automática de los reportes nuevos</span>
+            </ng-template>
+            <div class="flex flex-column gap-2">
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-sm">Modelo</span>
+                <span class="text-sm font-medium text-right">{{ sistema.ia.modelo }}</span>
+              </div>
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-sm">Cada cuánto revisa</span>
+                <span class="text-sm font-medium text-right">{{ frecuenciaLegible() }}</span>
+              </div>
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-sm">Reportes por tanda</span>
+                <span class="text-sm font-medium">{{ sistema.ia.batchSize }}</span>
+              </div>
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-sm">Intentos antes de desistir</span>
+                <span class="text-sm font-medium">{{ sistema.ia.maxIntentos }}</span>
+              </div>
+            </div>
+          </p-card>
+        </div>
+
+        <!-- Encuesta activa -->
+        <div class="col-12 md:col-6 lg:col-3">
+          <p-card styleClass="h-full">
+            <ng-template #title>
+              <span class="text-base">Encuesta activa</span>
+            </ng-template>
+            <ng-template #subtitle>
+              <span class="text-sm">El cuestionario que responde el ciudadano</span>
+            </ng-template>
+            @if (sistema.encuestaActiva; as encuesta) {
+              <div class="flex flex-column gap-2">
+                <div class="flex align-items-center justify-content-between gap-2">
+                  <span class="text-sm">Versión</span>
+                  <p-tag [value]="'v' + encuesta.version" severity="success" [rounded]="true" />
+                </div>
+                <span class="text-sm font-medium">{{ encuesta.nombre }}</span>
+                <span class="text-sm text-color-secondary">
+                  Fotos: mínimo {{ encuesta.fotosMin }}, máximo {{ encuesta.fotosMax }}
+                </span>
+              </div>
+            } @else {
+              <p-message severity="warn" variant="simple">
+                <span class="text-sm">No hay ninguna encuesta activa: nadie puede reportar.</span>
+              </p-message>
+            }
+          </p-card>
+        </div>
+
+        <!-- Motor de criticidad -->
+        <div class="col-12 md:col-6 lg:col-3">
+          <p-card styleClass="h-full">
+            <ng-template #title>
+              <span class="text-base">Motor de criticidad</span>
+            </ng-template>
+            <ng-template #subtitle>
+              <span class="text-sm">Versión con la que se calcula el nivel</span>
+            </ng-template>
+            @if (sistema.configuracionActiva; as config) {
+              <div class="flex flex-column gap-3 align-items-start">
+                <p-tag [value]="'v' + config.version" severity="success" [rounded]="true" />
+                <p-button
+                  label="Ver configuración"
+                  icon="pi pi-arrow-right"
+                  iconPos="right"
+                  [text]="true"
+                  [rounded]="true"
+                  size="small"
+                  (onClick)="irAlMotor()"
+                />
+              </div>
+            } @else {
+              <p-message severity="warn" variant="simple">
+                <span class="text-sm">No hay configuración activa: los reportes no se clasifican.</span>
+              </p-message>
+            }
+          </p-card>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 2. Transporte SMTP (editable) ================= -->
+    <section class="flex flex-column gap-3">
+      <div class="flex align-items-center gap-2 flex-wrap">
+        <i class="pi pi-envelope text-color-secondary"></i>
+        <h3 class="m-0 text-lg">Cuenta de correo para los avisos</h3>
+        @if (notificaciones()?.smtpHabilitado) {
+          <p-tag value="Habilitado" severity="success" [rounded]="true" />
+        } @else {
+          <p-tag value="Deshabilitado" severity="secondary" [rounded]="true" />
+        }
+        @if (form.dirty) {
+          <p-tag value="Cambios sin guardar" severity="warn" [rounded]="true" />
+        }
+      </div>
+
+      <!-- Dicho explícitamente para que nadie busque acá lo que no está. -->
+      <p-message severity="secondary" variant="simple" styleClass="w-full">
+        <span class="text-sm">
+          Acá se define <strong>desde qué cuenta</strong> salen los correos, nada más. <strong>Qué</strong> se
+          avisa, <strong>a quiénes</strong> y con qué nombre de remitente se configura en
+          <strong>Notificaciones</strong>.
+        </span>
+      </p-message>
+
+      @if (!puedeEditar) {
+        <p-message severity="warn" styleClass="w-full">
+          <span class="text-sm">Solo lectura: no tenés el permiso para editar la configuración del sistema.</span>
+        </p-message>
+      }
+
+      @if (sinCifrado()) {
+        <p-message severity="warn" styleClass="w-full">
+          <span class="text-sm">
+            Por ahora no se puede guardar la contraseña: falta una configuración de seguridad en el servidor que
+            permite resguardarla. Pedile a quien administra el sistema que la complete. El resto de los datos sí se
+            puede guardar.
+          </span>
+        </p-message>
+      }
+
+      <p-card>
+        <form [formGroup]="form" class="grid formgrid">
+          <!-- Interruptor del canal -->
+          <div class="col-12 field">
+            <div class="flex align-items-center gap-3">
+              <p-toggleswitch inputId="smtpHabilitado" formControlName="smtpHabilitado" />
+              <label for="smtpHabilitado" class="text-sm font-medium">Habilitar el envío de correos</label>
+            </div>
+            <small class="text-color-secondary">
+              Con el envío apagado podés guardar los datos a medio cargar; recién al encenderlo hace falta indicar
+              la dirección del servidor.
+            </small>
+          </div>
+
+          <!-- Servidor -->
+          <div class="col-12 md:col-6 field">
+            <label for="smtpHost" class="block text-sm font-medium mb-2">Dirección del servidor de correo</label>
+            <input
+              pInputText
+              id="smtpHost"
+              formControlName="smtpHost"
+              placeholder="smtp.gmail.com"
+              autocomplete="off"
+              [invalid]="isFieldInvalid('smtpHost')"
+              [fluid]="true"
+            />
+            @if (isFieldInvalid('smtpHost')) {
+              <p-message severity="error" size="small" variant="simple">
+                Indicá la dirección del servidor de correo.
+              </p-message>
+            }
+          </div>
+
+          <div class="col-12 md:col-3 field">
+            <label for="smtpPuerto" class="block text-sm font-medium mb-2">Puerto</label>
+            <p-inputnumber
+              inputId="smtpPuerto"
+              formControlName="smtpPuerto"
+              [min]="1"
+              [max]="65535"
+              [useGrouping]="false"
+              [invalid]="isFieldInvalid('smtpPuerto')"
+              [fluid]="true"
+            />
+            @if (isFieldInvalid('smtpPuerto')) {
+              <p-message severity="error" size="small" variant="simple">
+                El puerto es un número entre 1 y 65535. Si no lo sabés, dejá 587.
+              </p-message>
+            }
+          </div>
+
+          <div class="col-12 md:col-3 field">
+            <label for="smtpSeguridad" class="block text-sm font-medium mb-2">Seguridad</label>
+            <p-select
+              inputId="smtpSeguridad"
+              formControlName="smtpSeguridad"
+              [options]="seguridadOpciones"
+              optionLabel="label"
+              optionValue="value"
+              [fluid]="true"
+            />
+            <small class="text-color-secondary">{{ detalleSeguridad() }}</small>
+          </div>
+
+          <!-- Credenciales -->
+          <div class="col-12 md:col-6 field">
+            <label for="smtpUsuario" class="block text-sm font-medium mb-2">
+              Usuario
+              <span class="text-color-secondary font-normal">(dejalo vacío si el servidor no pide usuario)</span>
+            </label>
+            <input
+              pInputText
+              id="smtpUsuario"
+              formControlName="smtpUsuario"
+              placeholder="alertas@dominio.com"
+              autocomplete="off"
+              [fluid]="true"
+            />
+          </div>
+
+          <div class="col-12 md:col-6 field">
+            <label for="smtpContrasena" class="block text-sm font-medium mb-2">
+              Contraseña
+              @if (notificaciones()?.tieneContrasena && !borrarContrasena()) {
+                <span class="text-color-secondary font-normal">(dejala vacía para no cambiarla)</span>
+              }
+            </label>
+            <p-password
+              inputId="smtpContrasena"
+              formControlName="smtpContrasena"
+              [feedback]="false"
+              [toggleMask]="true"
+              [fluid]="true"
+              autocomplete="new-password"
+            />
+            <div class="flex align-items-center gap-2 mt-1 flex-wrap">
+              @if (borrarContrasena()) {
+                <p-tag value="Se va a borrar al guardar" severity="warn" [rounded]="true" />
+                <p-button
+                  label="Cancelar"
+                  [text]="true"
+                  [rounded]="true"
+                  size="small"
+                  (onClick)="cancelarBorrarContrasena()"
+                />
+              } @else if (notificaciones()?.tieneContrasena) {
+                <p-tag value="Hay una contraseña guardada" severity="secondary" [rounded]="true" />
+                @if (puedeEditar) {
+                  <p-button
+                    label="Quitarla"
+                    icon="pi pi-times"
+                    severity="danger"
+                    [text]="true"
+                    [rounded]="true"
+                    size="small"
+                    pTooltip="Conectarse al servidor sin usuario ni contraseña"
+                    tooltipPosition="left"
+                    (onClick)="marcarParaBorrarContrasena()"
+                  />
+                }
+              } @else {
+                <small class="text-color-secondary">
+                  Se guarda protegida y no vuelve a mostrarse, por seguridad.
+                </small>
+              }
+            </div>
+          </div>
+
+          @if (puedeEditar) {
+            <!-- Acciones -->
+            <div class="col-12">
+              <div class="flex flex-column sm:flex-row gap-2 sm:align-items-center sm:justify-content-end">
+                <p-button
+                  label="Descartar"
+                  icon="pi pi-undo"
+                  severity="secondary"
+                  [text]="true"
+                  [rounded]="true"
+                  [disabled]="!form.dirty || guardando()"
+                  (onClick)="descartar()"
+                />
+                <p-button
+                  label="Guardar configuración"
+                  icon="pi pi-save"
+                  [rounded]="true"
+                  [loading]="guardando()"
+                  [disabled]="!form.dirty"
+                  (onClick)="guardar()"
+                />
+              </div>
+            </div>
+
+            <!-- Prueba de envío -->
+            <div class="col-12">
+              <div class="surface-100 border-round-lg p-3 flex flex-column gap-2">
+                <span class="text-sm font-medium">Probar el envío</span>
+                <span class="text-sm text-color-secondary">
+                  Envía un correo de verdad con los datos <strong>ya guardados</strong>. Es la mejor forma de
+                  confirmar que todo está bien antes de que haya una alerta real.
+                  @if (notificaciones()?.remitenteEfectivo) {
+                    Va a llegar de parte de {{ notificaciones()?.remitenteEfectivo }}.
+                  }
+                </span>
+                <div class="flex flex-column sm:flex-row gap-2 sm:align-items-center">
+                  <input
+                    pInputText
+                    id="destinatarioPrueba"
+                    type="email"
+                    [ngModel]="destinatarioPrueba()"
+                    (ngModelChange)="destinatarioPrueba.set($event)"
+                    [ngModelOptions]="{ standalone: true }"
+                    placeholder="correo@dominio.com"
+                    aria-label="Destinatario del correo de prueba"
+                    [fluid]="true"
+                  />
+                  <p-button
+                    label="Enviar prueba"
+                    icon="pi pi-send"
+                    [outlined]="true"
+                    [rounded]="true"
+                    [loading]="probando()"
+                    [disabled]="!puedeProbar()"
+                    styleClass="white-space-nowrap"
+                    (onClick)="probar()"
+                  />
+                </div>
+                @if (form.dirty) {
+                  <p-message severity="warn" size="small" variant="simple">
+                    Guardá los cambios primero: la prueba usa lo último guardado, no lo que ves en pantalla.
+                  </p-message>
+                } @else if (!correoHabilitado()) {
+                  <p-message severity="secondary" size="small" variant="simple">
+                    Habilitá el envío de correos y guardá para poder probar.
+                  </p-message>
+                }
+              </div>
+            </div>
+          }
+        </form>
+
+        <ng-template #footer>
+          @if (notificaciones()?.fechaActualizacion) {
+            <span class="text-sm text-color-secondary">
+              Última modificación: {{ notificaciones()?.fechaActualizacion | date: 'dd/MM/yy HH:mm' }}
+              @if (notificaciones()?.actualizadoPor; as editor) {
+                — {{ editor.nombreCompleto }}
+              }
+            </span>
+          } @else {
+            <span class="text-sm text-color-secondary">Nunca se guardó una configuración de correo.</span>
+          }
+        </ng-template>
+      </p-card>
+    </section>
+  }
+</div>

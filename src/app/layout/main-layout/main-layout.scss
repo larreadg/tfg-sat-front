@@ -1,0 +1,38 @@
+// PrimeFlex no expone utilidades de fondo con los tonos del primary del tema:
+// se usan los tokens semánticos de PrimeNG para el estado hover/activo de la navegación.
+
+.nav-item {
+  transition:
+    background-color 150ms ease-out,
+    color 150ms ease-out;
+
+  &:hover {
+    background: var(--p-menu-item-focus-background);
+  }
+}
+
+.nav-item-active {
+  // `highlight` es el token del tema para "este es el ítem elegido": en claro da
+  // el mismo tinte primary-50 de siempre y en oscuro un primary translúcido
+  // sobre la superficie. Un `--p-primary-50` fijo no sirve para las dos: los
+  // tonos de la paleta no cambian con el esquema y en oscuro quedaría como una
+  // mancha clara en medio del panel.
+  background: var(--p-highlight-background);
+
+  &:hover {
+    background: var(--p-highlight-background);
+  }
+
+  // El `color` del ancla lo fija `text-color` de PrimeFlex con `!important`, así
+  // que el acento del ítem activo lo lleva el ícono. `light-dark()` resuelve con
+  // el `color-scheme` que declara `styles.scss`.
+  i {
+    color: light-dark(var(--p-primary-700), var(--p-primary-400));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-item {
+    transition: none;
+  }
+}

@@ -1,0 +1,58 @@
+@let a = alerta();
+
+<p-card [styleClass]="clases()">
+  <!-- Tarjeta compacta: a la izquierda los tres datos que distinguen una alerta
+       de otra (criticidad, cuántos reportes la sustentan, cuándo se generó); a
+       la derecha las acciones. Todo lo demás está en el detalle del mapa. -->
+  <div class="flex align-items-center justify-content-between gap-2">
+    <div class="flex flex-column gap-1">
+      <div class="inline-flex align-items-center gap-2 flex-wrap">
+        <app-nivel-tag [nivel]="a.nivel" />
+        <span class="text-sm font-medium white-space-nowrap">{{ textoReportes() }}</span>
+      </div>
+      <span class="text-xs text-color-secondary white-space-nowrap">
+        {{ a.fechaCreacion | date: 'dd/MM/yy HH:mm' }}
+      </span>
+    </div>
+
+    <div class="inline-flex align-items-center gap-1 flex-shrink-0">
+      @if (enCurso()) {
+        <i class="pi pi-spin pi-spinner text-color-secondary text-sm" aria-label="Guardando el cambio"></i>
+      } @else if (arrastrable()) {
+        <i
+          class="pi pi-bars text-color-secondary text-sm alerta-tarjeta__asidero"
+          aria-hidden="true"
+          pTooltip="Arrastrá la tarjeta a otra columna para cambiar su estado"
+          tooltipPosition="left"
+        ></i>
+      }
+
+      <p-button
+        icon="pi pi-arrow-right"
+        [text]="true"
+        [rounded]="true"
+        size="small"
+        severity="secondary"
+        [routerLink]="['/alertas', a.id]"
+        ariaLabel="Abrir la alerta"
+        pTooltip="Abrir la alerta"
+        tooltipPosition="left"
+      />
+
+      @if (conCambioEstado()) {
+        <!-- Solo en la vista apilada (tacto), donde no hay arrastre. -->
+        <p-button
+          icon="pi pi-sync"
+          [text]="true"
+          [rounded]="true"
+          size="small"
+          ariaLabel="Cambiar el estado de la alerta"
+          pTooltip="Cambiar estado"
+          tooltipPosition="left"
+          [disabled]="enCurso()"
+          (onClick)="cambiarEstado.emit(a)"
+        />
+      }
+    </div>
+  </div>
+</p-card>

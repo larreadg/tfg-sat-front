@@ -1,0 +1,25 @@
+// PrimeNG no expone un design token de font-family para el título del step (solo
+// color y font-weight); ::ng-deep es necesario porque el título vive en el DOM
+// interno de p-step, fuera del encapsulamiento de este componente.
+::ng-deep .p-step-title {
+  font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+// El stepper vertical de PrimeNG aplica un indent al contenido (margin-inline-start
+// hardcodeado y, en el último paso, padding-inline-start extra) que no está expuesto
+// como design token configurable, y dibuja una línea separadora entre pasos que en
+// este layout compacto solo resta espacio sin aportar. :host ::ng-deep para acceder
+// al DOM interno de p-step-panel sin filtrar el override a otros steppers de la app.
+:host ::ng-deep {
+  .p-stepitem .p-steppanel-content {
+    margin-inline-start: 0;
+  }
+
+  .p-stepitem:last-of-type .p-steppanel {
+    padding-inline-start: 0;
+  }
+
+  .p-stepper-separator {
+    display: none;
+  }
+}

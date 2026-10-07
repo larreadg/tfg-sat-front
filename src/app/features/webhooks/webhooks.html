@@ -1,0 +1,330 @@
+<p-confirmdialog [style]="{ width: '32rem' }" [breakpoints]="{ '768px': '95vw' }" />
+
+<div class="flex flex-column gap-4">
+  <div class="flex flex-column gap-2">
+    <h1 class="text-2xl font-semibold m-0">Notificaciones</h1>
+    <p class="text-color-secondary m-0">
+      Avisos automáticos: <strong>cuando pase algo</strong> y <strong>se cumpla una condición</strong>,
+      <strong>enviar un correo o avisar a otro sistema</strong>. Podés crear tantas reglas como necesites y
+      cambiarlas cuando quieras.
+    </p>
+  </div>
+
+  @if (error()) {
+    <p-message severity="error" styleClass="w-full">
+      <div class="flex align-items-center justify-content-between gap-3 w-full">
+        <span>No se pudieron cargar las notificaciones.</span>
+        <p-button label="Reintentar" icon="pi pi-refresh" [text]="true" [rounded]="true" (onClick)="reintentar()" />
+      </div>
+    </p-message>
+  } @else if (loading()) {
+    <p-skeleton height="12rem" borderRadius="0.75rem" />
+    <p-skeleton height="18rem" borderRadius="0.75rem" />
+  } @else if (catalogo(); as cat) {
+    <!-- Avisos que se arreglan en OTRA pantalla: se dicen arriba y con el link. -->
+    @if (smtpApagado()) {
+      <p-message severity="warn" styleClass="w-full">
+        <div class="flex align-items-center justify-content-between gap-3 w-full flex-wrap">
+          <span class="text-sm">
+            El envío de correos está deshabilitado: las reglas de correo no van a mandar nada.
+          </span>
+          <a
+            [routerLink]="['/configuracion']"
+            [queryParams]="{ tab: 'sistema' }"
+            class="text-sm font-medium white-space-nowrap"
+          >
+            Configurar el correo →
+          </a>
+        </div>
+      </p-message>
+    }
+
+    @if (reglasConProblema().length > 0) {
+      <p-message severity="warn" styleClass="w-full">
+        <div class="flex flex-column gap-1">
+          <span class="text-sm font-medium">
+            {{ reglasConProblema().length }}
+            {{ reglasConProblema().length === 1 ? 'regla no puede ejecutarse' : 'reglas no pueden ejecutarse' }}
+          </span>
+          <ul class="m-0 pl-4">
+            @for (regla of reglasConProblema(); track regla.id) {
+              <li class="text-sm"><strong>{{ regla.nombre }}</strong>: {{ regla.advertencia }}</li>
+            }
+          </ul>
+        </div>
+      </p-message>
+    }
+
+    <!-- ================= Remitente ================= -->
+    <section class="flex flex-column gap-3">
+      <div class="flex align-items-center gap-2 flex-wrap">
+        <i class="pi pi-at text-color-secondary"></i>
+        <h3 class="m-0 text-lg">Remitente de los correos</h3>
+        @if (remitente()?.remitenteEfectivo) {
+          <p-tag [value]="remitente()!.remitenteEfectivo" severity="secondary" [rounded]="true" />
+        } @else {
+          <p-tag value="Sin definir" severity="warn" [rounded]="true" />
+        }
+      </div>
+
+      <p-card>
+        <form [formGroup]="remitenteForm" class="grid formgrid">
+          <div class="col-12 md:col-6 field mb-0">
+            <label for="remitenteNombre" class="block text-sm font-medium mb-2">Nombre visible</label>
+            <input
+              pInputText
+              id="remitenteNombre"
+              formControlName="remitenteNombre"
+              placeholder="AGUARD — Alertas"
+              autocomplete="off"
+              [fluid]="true"
+            />
+          </div>
+
+          <div class="col-12 md:col-6 field mb-0">
+            <label for="remitenteCorreo" class="block text-sm font-medium mb-2">
+              Correo
+              <span class="text-color-secondary font-normal">
+                (si lo dejás vacío se usa la cuenta configurada en Sistema)
+              </span>
+            </label>
+            <input
+              pInputText
+              id="remitenteCorreo"
+              type="email"
+              formControlName="remitenteCorreo"
+              placeholder="alertas@dominio.com"
+              autocomplete="off"
+              [invalid]="isRemitenteInvalid('remitenteCorreo')"
+              [fluid]="true"
+            />
+            @if (isRemitenteInvalid('remitenteCorreo')) {
+              <p-message severity="error" size="small" variant="simple">Ingresá un correo válido.</p-message>
+            }
+          </div>
+
+          <div class="col-12 mt-3">
+            <div class="flex flex-column sm:flex-row gap-2 sm:align-items-center sm:justify-content-between">
+              <small class="text-color-secondary">
+                Es el remitente que van a ver las personas que reciban los avisos. Si lo dejás vacío se usa la
+                cuenta de correo configurada en Configuración → Sistema, que además es lo que proveedores como
+                Gmail u Office 365 exigen de todas formas.
+              </small>
+              @if (puedeEditar) {
+                <p-button
+                  label="Guardar remitente"
+                  icon="pi pi-save"
+                  [rounded]="true"
+                  [loading]="guardandoRemitente()"
+                  [disabled]="!remitenteForm.dirty"
+                  styleClass="white-space-nowrap"
+                  (onClick)="guardarRemitente()"
+                />
+              }
+            </div>
+          </div>
+        </form>
+      </p-card>
+    </section>
+
+    <!-- ================= Reglas ================= -->
+    <section class="flex flex-column gap-3">
+      <div class="flex align-items-center gap-2 flex-wrap">
+        <i class="pi pi-bolt text-color-secondary"></i>
+        <h3 class="m-0 text-lg">Reglas</h3>
+        <p-tag [value]="total() + (total() === 1 ? ' regla' : ' reglas')" severity="secondary" [rounded]="true" />
+      </div>
+
+      <!-- Filtros colapsables. "Nueva regla" queda FUERA del panel: es la
+           acción principal de la sección y no puede esconderse al colapsar. -->
+      <div class="flex align-items-start gap-2">
+        <app-filtros-panel class="flex-1" [resumen]="filtrosAplicados()">
+          <div class="grid formgrid">
+            <div class="col-12 md:col-6 field mb-0">
+              <label for="filtroEvento" class="block text-sm font-medium mb-2">Filtrar por evento</label>
+              <p-select
+                inputId="filtroEvento"
+                [ngModel]="filtroEvento()"
+                (ngModelChange)="filtroEvento.set($event)"
+                [ngModelOptions]="{ standalone: true }"
+                [options]="eventoOpciones()"
+                optionLabel="label"
+                optionValue="value"
+                (onChange)="aplicarFiltro()"
+                [fluid]="true"
+              />
+            </div>
+          </div>
+        </app-filtros-panel>
+
+        @if (puedeCrear) {
+          <p-button label="Nueva regla" icon="pi pi-plus" [rounded]="true" (onClick)="nueva()" />
+        }
+      </div>
+
+      <!-- `min-width` + el scroll propio del p-table: la tabla scrollea adentro,
+           la página nunca queda con scroll horizontal en mobile. -->
+      <p-table [value]="reglas()" [tableStyle]="{ 'min-width': '64rem' }" [rowHover]="true">
+        <ng-template #header>
+          <tr>
+            <th>Regla</th>
+            <th style="width: 13rem">Cuándo</th>
+            <th style="width: 12rem">Condición</th>
+            <th style="width: 10rem">Acción</th>
+            <th>Destino</th>
+            <th style="width: 9rem">Última entrega</th>
+            <th style="width: 12rem"></th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-r>
+          <tr>
+            <td>
+              <div class="flex flex-column gap-1">
+                <span class="font-medium">{{ r.nombre }}</span>
+                <div class="flex align-items-center gap-1 flex-wrap">
+                  <p-tag
+                    [value]="r.activa ? 'Activa' : 'Inactiva'"
+                    [severity]="r.activa ? 'success' : 'secondary'"
+                    [rounded]="true"
+                  />
+                  @if (r.advertencia) {
+                    <p-tag
+                      value="No puede ejecutarse"
+                      severity="warn"
+                      [rounded]="true"
+                      [pTooltip]="r.advertencia"
+                      tooltipPosition="left"
+                    />
+                  }
+                </div>
+              </div>
+            </td>
+            <td class="text-sm">{{ etiquetaEvento(r.evento) }}</td>
+            <td class="text-sm text-color-secondary">{{ resumenCondiciones(r) }}</td>
+            <td class="text-sm">
+              <p-tag
+                [value]="r.accion === 'CORREO' ? 'Correo' : 'Otro sistema'"
+                [severity]="r.accion === 'CORREO' ? 'info' : 'contrast'"
+                [rounded]="true"
+              />
+              @if (r.accion === 'HTTP' && r.tieneSecretoFirma) {
+                <i
+                  class="pi pi-lock text-color-secondary ml-2"
+                  pTooltip="El aviso se envía firmado, para que el destino pueda comprobar que salió de acá"
+                  tooltipPosition="left"
+                ></i>
+              }
+            </td>
+            <td class="text-sm" style="word-break: break-all">{{ resumenDestino(r) }}</td>
+            <td class="text-sm white-space-nowrap">
+              @if (r.ultimaEntrega; as entrega) {
+                <p-tag
+                  [value]="entrega.exito ? 'Enviada' : 'Falló'"
+                  [severity]="entrega.exito ? 'success' : 'danger'"
+                  [rounded]="true"
+                  [pTooltip]="entrega.detalle"
+                  tooltipPosition="left"
+                />
+              } @else {
+                <span class="text-color-secondary">todavía no se usó</span>
+              }
+            </td>
+            <td class="text-right white-space-nowrap">
+              <p-button
+                icon="pi pi-history"
+                [text]="true"
+                [rounded]="true"
+                severity="secondary"
+                size="small"
+                pTooltip="Ver historial de avisos"
+                tooltipPosition="left"
+                ariaLabel="Ver el historial de avisos enviados"
+                (onClick)="verEntregas(r)"
+              />
+              @if (puedeEditar) {
+                <p-button
+                  icon="pi pi-send"
+                  [text]="true"
+                  [rounded]="true"
+                  severity="secondary"
+                  size="small"
+                  [loading]="probandoId() === r.id"
+                  pTooltip="Probar con datos de ejemplo"
+                  tooltipPosition="left"
+                  ariaLabel="Probar la regla"
+                  (onClick)="probar(r)"
+                />
+                <p-button
+                  [icon]="r.activa ? 'pi pi-pause' : 'pi pi-play'"
+                  [text]="true"
+                  [rounded]="true"
+                  severity="secondary"
+                  size="small"
+                  [pTooltip]="r.activa ? 'Desactivar' : 'Activar'"
+                  tooltipPosition="left"
+                  [ariaLabel]="r.activa ? 'Desactivar la regla' : 'Activar la regla'"
+                  (onClick)="alternarActiva(r)"
+                />
+                <p-button
+                  icon="pi pi-pencil"
+                  [text]="true"
+                  [rounded]="true"
+                  severity="secondary"
+                  size="small"
+                  pTooltip="Editar"
+                  tooltipPosition="left"
+                  ariaLabel="Editar la regla"
+                  (onClick)="editar(r)"
+                />
+              }
+              @if (puedeEliminar) {
+                <p-button
+                  icon="pi pi-trash"
+                  [text]="true"
+                  [rounded]="true"
+                  severity="danger"
+                  size="small"
+                  pTooltip="Eliminar"
+                  tooltipPosition="left"
+                  ariaLabel="Eliminar la regla"
+                  (onClick)="eliminar(r)"
+                />
+              }
+            </td>
+          </tr>
+        </ng-template>
+
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="7">
+              <div class="flex flex-column align-items-center gap-3 py-5">
+                <i class="pi pi-bolt text-color-secondary" style="font-size: 2rem"></i>
+                <span class="text-color-secondary">Todavía no hay ninguna regla.</span>
+                <span class="text-sm text-color-secondary" style="max-width: 48ch; text-align: center">
+                  Mientras no haya reglas, el sistema registra las alertas pero no avisa a nadie fuera del panel.
+                </span>
+                @if (puedeCrear) {
+                  <p-button label="Crear la primera" icon="pi pi-plus" [rounded]="true" (onClick)="nueva()" />
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+
+      @if (total() > pageSize) {
+        <p-paginator [first]="first()" [rows]="pageSize" [totalRecords]="total()" (onPageChange)="onPage($event)" />
+      }
+    </section>
+
+    <app-regla-form
+      [(visible)]="formVisible"
+      [catalogo]="cat"
+      [regla]="reglaSeleccionada()"
+      (guardado)="onGuardado()"
+    />
+  }
+
+  <app-webhook-entregas [(visible)]="entregasVisible" [regla]="reglaSeleccionada()" />
+</div>

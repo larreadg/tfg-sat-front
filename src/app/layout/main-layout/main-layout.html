@@ -1,49 +1,138 @@
-<div class="min-h-screen flex flex-column">
-  <header
-    class="flex align-items-center justify-content-between px-3 surface-card border-bottom-1 surface-border flex-shrink-0"
-    style="height: 4rem"
+<div class="h-screen flex overflow-hidden">
+  <aside
+    class="hidden md:flex flex-column surface-card border-right-1 surface-border flex-shrink-0"
+    [class.w-4rem]="sidebarCollapsed()"
+    [class.w-18rem]="!sidebarCollapsed()"
   >
-    <div class="flex align-items-center gap-2">
+    <ng-container *ngTemplateOutlet="sidebarContent; context: { mobile: false, collapsed: sidebarCollapsed() }" />
+  </aside>
+
+  <p-drawer
+    [(visible)]="sidebarVisible"
+    [closable]="false"
+    position="left"
+    ariaCloseLabel="Cerrar menú"
+    styleClass="w-18rem"
+  >
+    <ng-container *ngTemplateOutlet="sidebarContent; context: { mobile: true, collapsed: false }" />
+  </p-drawer>
+
+  <div class="flex-1 flex flex-column min-w-0 surface-ground">
+    <header
+      class="flex align-items-center gap-2 px-3 md:px-5 surface-card border-bottom-1 surface-border flex-shrink-0"
+      style="height: 3.75rem"
+    >
       <p-button
         icon="pi pi-bars"
         [text]="true"
         [rounded]="true"
         severity="secondary"
-        styleClass="md:hidden"
-        ariaLabel="Abrir menú"
+        [ariaLabel]="sidebarToggleLabel()"
+        [attr.aria-expanded]="sidebarVisible() || !sidebarCollapsed()"
         (onClick)="toggleSidebar()"
       />
-      <div class="flex align-items-center justify-content-center border-round-lg surface-100 w-2rem h-2rem">
-        <i class="pi pi-shield text-primary"></i>
-      </div>
-      <span class="font-semibold">Sistema de Análisis de Agua</span>
-    </div>
+      <p-breadcrumb [model]="breadcrumbItems()" [home]="breadcrumbHome" styleClass="border-none p-0" />
 
-    <div class="flex align-items-center">
-      <p-avatar
-        icon="pi pi-user"
-        shape="circle"
-        styleClass="cursor-pointer"
-        ariaLabel="Menú de usuario"
-        (click)="userMenu.toggle($event)"
+      <p-button
+        class="ml-auto"
+        [icon]="temaService.iconoAlternar()"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        [ariaLabel]="temaService.etiquetaAlternar()"
+        [pTooltip]="temaService.etiquetaAlternar()"
+        tooltipPosition="left"
+        (onClick)="temaService.alternar()"
       />
-      <p-menu #userMenu [model]="userMenuItems" [popup]="true" />
-    </div>
-  </header>
+    </header>
 
-  <div class="flex flex-1">
-    <aside class="hidden md:block surface-card border-right-1 surface-border flex-shrink-0" style="width: 16rem">
-      <p-menu [model]="navItems" styleClass="border-none w-full" />
-    </aside>
-
-    <p-drawer [(visible)]="sidebarVisible" position="left" [modal]="true" header="Menú">
-      <div (click)="closeSidebar()">
-        <p-menu [model]="navItems" styleClass="border-none w-full" />
-      </div>
-    </p-drawer>
-
-    <main class="flex-1 p-4 overflow-auto surface-ground">
+    <main class="flex-1 p-4 md:p-5 overflow-auto">
       <router-outlet />
     </main>
   </div>
 </div>
+
+<ng-template #sidebarContent let-mobile="mobile" let-collapsed="collapsed">
+  <div class="flex flex-column h-full">
+    <div
+      class="flex align-items-center gap-2 flex-shrink-0 border-bottom-1 surface-border"
+      [class.px-4]="!collapsed"
+      [class.px-2]="collapsed"
+      [class.justify-content-center]="collapsed"
+      style="height: 3.75rem"
+    >
+      <img src="logo1.webp" alt="AGUARD" class="flex-shrink-0" style="height: 1.75rem; width: auto" />
+      @if (!collapsed) {
+        <span class="font-bold">AGUARD</span>
+        <p-tag [value]="appVersion" severity="secondary" [rounded]="true" />
+      }
+      @if (mobile) {
+        <p-button
+          icon="pi pi-times"
+          [text]="true"
+          [rounded]="true"
+          severity="secondary"
+          styleClass="ml-auto"
+          ariaLabel="Cerrar menú"
+          (onClick)="closeSidebar()"
+        />
+      }
+    </div>
+
+    <p-menu
+      [model]="navItems()"
+      [style]="{ 'min-width': collapsed ? '0' : null }"
+      class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+      styleClass="border-none w-full px-2 py-2"
+    >
+      <ng-template #item let-item>
+        <a
+          *appTienePermiso="item.permiso; modo: item.modoPermiso"
+          [routerLink]="item.routerLink"
+          routerLinkActive="nav-item-active"
+          class="nav-item flex align-items-center gap-3 px-3 py-3 border-round-lg text-color no-underline"
+          [class.justify-content-center]="collapsed"
+          [pTooltip]="collapsed ? item.label : undefined"
+          tooltipPosition="left"
+          (click)="closeSidebar()"
+        >
+          <i [class]="item.icon"></i>
+          @if (!collapsed) {
+            <span class="font-medium">{{ item.label }}</span>
+          }
+        </a>
+      </ng-template>
+    </p-menu>
+
+    <div class="border-top-1 surface-border p-3 flex-shrink-0">
+      <div class="flex align-items-center gap-2" [class.flex-column]="collapsed" [class.justify-content-center]="collapsed">
+        <p-avatar
+          [label]="iniciales()"
+          shape="circle"
+          [pTooltip]="collapsed ? (authService.nombreCompleto() ?? undefined) : undefined"
+          tooltipPosition="left"
+        />
+        @if (!collapsed) {
+          <div class="flex-1 flex flex-column min-w-0">
+            <span class="font-medium text-sm white-space-nowrap overflow-hidden text-overflow-ellipsis">
+              {{ authService.nombreCompleto() }}
+            </span>
+            <span class="text-xs text-color-secondary white-space-nowrap overflow-hidden text-overflow-ellipsis">
+              {{ authService.usuarioActual()?.correoElectronico }}
+            </span>
+          </div>
+        }
+        <p-button
+          icon="pi pi-sign-out"
+          [text]="true"
+          [rounded]="true"
+          severity="secondary"
+          [pTooltip]="collapsed ? 'Cerrar sesión' : undefined"
+          tooltipPosition="left"
+          ariaLabel="Cerrar sesión"
+          (onClick)="logout()"
+        />
+      </div>
+    </div>
+  </div>
+</ng-template>

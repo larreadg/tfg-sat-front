@@ -1,0 +1,422 @@
+<div class="flex flex-column gap-4">
+  <div class="flex flex-column gap-2">
+    <h1 class="text-2xl font-semibold m-0">Análisis</h1>
+    <p class="text-color-secondary m-0">
+      Lectura agregada del sistema: situación actual, cómo evoluciona, qué factores del motor de criticidad están
+      empujando el nivel y si el análisis automático y la gestión de alertas están al día.
+    </p>
+  </div>
+
+  <!-- Período: único filtro, con las acciones al cierre de la misma fila -->
+  <app-filtros-panel [resumen]="filtrosAplicados()">
+    <div class="grid formgrid align-items-end">
+      <div class="field col-12 md:col-4 mb-0">
+        <label for="filtro-periodo" class="block text-sm font-medium mb-2">Período</label>
+        <p-datepicker
+          inputId="filtro-periodo"
+          [(ngModel)]="rango"
+          selectionMode="range"
+          [readonlyInput]="true"
+          dateFormat="dd/mm/yy"
+          [maxDate]="hoy"
+          [showButtonBar]="true"
+          [showClear]="true"
+          placeholder="Últimos 30 días"
+          styleClass="w-full"
+        />
+      </div>
+
+      <div
+        class="col-12 md:col-8 flex flex-column sm:flex-row justify-content-end align-items-stretch sm:align-items-center gap-2 mt-3 md:mt-0"
+      >
+        <p-button
+          label="Limpiar"
+          icon="pi pi-filter-slash"
+          [text]="true"
+          [rounded]="true"
+          severity="secondary"
+          pTooltip="Volver a los últimos 30 días"
+          tooltipPosition="left"
+          (onClick)="limpiar()"
+        />
+        <p-button label="Aplicar" icon="pi pi-filter" [rounded]="true" (onClick)="aplicar()" />
+      </div>
+    </div>
+  </app-filtros-panel>
+
+  @if (loading()) {
+    <div class="grid">
+      @for (bloque of [1, 2, 3, 4]; track bloque) {
+        <div class="col-12 sm:col-6 lg:col-3"><p-skeleton height="7rem" borderRadius="8px" /></div>
+      }
+      <div class="col-12"><p-skeleton height="20rem" borderRadius="8px" /></div>
+      <div class="col-12 lg:col-6"><p-skeleton height="16rem" borderRadius="8px" /></div>
+      <div class="col-12 lg:col-6"><p-skeleton height="16rem" borderRadius="8px" /></div>
+    </div>
+  } @else if (error()) {
+    <p-card>
+      <div class="flex flex-column align-items-center gap-3 py-5 text-center">
+        <i class="pi pi-exclamation-triangle text-3xl text-color-secondary"></i>
+        <div class="flex flex-column gap-1">
+          <span class="font-medium">No se pudo cargar el análisis</span>
+          <span class="text-sm text-color-secondary">Revisá tu conexión e intentá nuevamente.</span>
+        </div>
+        <p-button label="Reintentar" icon="pi pi-refresh" [rounded]="true" (onClick)="reintentar()" />
+      </div>
+    </p-card>
+  } @else if (resumen(); as r) {
+    <!-- 1. Situación actual -->
+    <div class="flex flex-column gap-2">
+      <div class="flex align-items-center gap-2">
+        <h2 class="text-lg font-semibold m-0">Situación actual</h2>
+        <span class="text-sm text-color-secondary">— no depende del período elegido</span>
+      </div>
+      <div class="grid">
+        <div class="col-12 sm:col-6 lg:col-3">
+          <p-card>
+            <div class="flex flex-column gap-1">
+              <span class="text-sm text-color-secondary">Reportes últimas 24 h</span>
+              <span class="text-3xl font-semibold">{{ r.situacion.reportes24h }}</span>
+              <span class="text-xs text-color-secondary">{{ r.situacion.reportes7d }} en los últimos 7 días</span>
+            </div>
+          </p-card>
+        </div>
+        <div class="col-12 sm:col-6 lg:col-3">
+          <p-card>
+            <div class="flex flex-column gap-1">
+              <span class="text-sm text-color-secondary">Alertas activas</span>
+              <span class="text-3xl font-semibold">{{ r.situacion.alertasActivasTotal }}</span>
+              <div class="flex align-items-center flex-wrap gap-2">
+                @for (fila of r.situacion.alertasActivasPorNivel; track fila.nivel) {
+                  <span class="inline-flex align-items-center gap-1 text-xs">
+                    <app-nivel-tag [nivel]="fila.nivel" />
+                    <span class="font-medium">{{ fila.cantidad }}</span>
+                  </span>
+                } @empty {
+                  <span class="text-xs text-color-secondary">Nada abierto</span>
+                }
+              </div>
+            </div>
+          </p-card>
+        </div>
+        <div class="col-12 sm:col-6 lg:col-3">
+          <p-card>
+            <div class="flex flex-column gap-1">
+              <span class="text-sm text-color-secondary">Puntos críticos activos</span>
+              <span class="text-3xl font-semibold">{{ r.situacion.puntosCriticosActivos }}</span>
+              <span class="text-xs text-color-secondary">Grupos de reportes cercanos</span>
+            </div>
+          </p-card>
+        </div>
+        <div class="col-12 sm:col-6 lg:col-3">
+          <p-card>
+            <div class="flex flex-column gap-1">
+              <span class="text-sm text-color-secondary">Sin analizar</span>
+              <span class="text-3xl font-semibold">{{ r.situacion.sinAnalizar }}</span>
+              <span class="text-xs text-color-secondary">
+                @if (r.situacion.sinAnalizar > 0) {
+                  Esperan la revisión automática
+                } @else {
+                  Al día
+                }
+              </span>
+            </div>
+          </p-card>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Tendencia -->
+    <p-card>
+      <div class="flex flex-column gap-3">
+        <div class="flex align-items-center justify-content-between gap-2 flex-wrap">
+          <h2 class="text-lg font-semibold m-0">Reportes por día</h2>
+          <span class="text-sm text-color-secondary">
+            {{ r.situacion.reportesPeriodo }} reportes en el período
+          </span>
+        </div>
+        @if (hayDatosPeriodo()) {
+          <p-chart type="bar" [data]="tendenciaData()" [options]="tendenciaOpciones()" height="18rem" />
+        } @else {
+          <div class="flex align-items-center gap-2 text-sm text-color-secondary py-4">
+            <i class="pi pi-info-circle"></i>No hay reportes en el período elegido.
+          </div>
+        }
+      </div>
+    </p-card>
+
+    <!-- 3. De dónde sale el riesgo -->
+    <p-card>
+      <div class="flex flex-column gap-4">
+        <div class="flex flex-column gap-1">
+          <h2 class="text-lg font-semibold m-0">De dónde sale el riesgo</h2>
+          <span class="text-sm text-color-secondary">
+            Promedio de cada factor del motor (escala 0–5) sobre los
+            {{ r.factores.reportesConDesglose }} reportes con criticidad calculada. Un factor sin dato no se
+            promedia: su peso se reparte entre los demás.
+          </span>
+        </div>
+
+        <div class="grid">
+          <div class="col-12 lg:col-7">
+            <div class="flex flex-column gap-3">
+              @for (factor of r.factores.promedios; track factor.factor) {
+                <div class="flex flex-column gap-1">
+                  <div class="flex align-items-center justify-content-between gap-2">
+                    <span class="text-sm font-medium">{{ factor.etiqueta }}</span>
+                    <span class="text-sm">
+                      <span class="font-semibold">{{ decimal(factor.promedio) }}</span>
+                      <span class="text-color-secondary"> / 5</span>
+                    </span>
+                  </div>
+                  <p-progressbar [value]="porcentajeFactor(factor)" [showValue]="false" styleClass="h-1rem" />
+                  <span class="text-xs text-color-secondary">
+                    @if (factor.disponibleEn === 0) {
+                      Sin datos en el período
+                    } @else {
+                      Disponible en {{ factor.disponibleEn }} de {{ r.factores.reportesConDesglose }} reportes
+                    }
+                  </span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="col-12 lg:col-5">
+            <div class="flex flex-column gap-3">
+              <div class="flex flex-column gap-1">
+                <span class="text-sm text-color-secondary">Criticidad promedio</span>
+                <div class="flex align-items-baseline gap-2">
+                  <span class="text-3xl font-semibold">{{ decimal(r.factores.criticidadPromedio) }}</span>
+                  <span class="text-color-secondary">/ 5</span>
+                </div>
+                @if (r.factores.umbrales; as u) {
+                  <span class="text-xs text-color-secondary">
+                    Umbrales: Bajo ≥ {{ u.n1 }} · Medio ≥ {{ u.n2 }} · Alto ≥ {{ u.n3 }}
+                  </span>
+                }
+              </div>
+
+              <div class="flex flex-column gap-2">
+                <span class="text-sm text-color-secondary">Reglas especiales aplicadas</span>
+                <div class="flex align-items-center justify-content-between gap-2 text-sm">
+                  <span>Reportes en un lugar vulnerable</span>
+                  <span class="font-medium">
+                    {{ r.factores.conBonusVulnerabilidad }}
+                    <span class="text-color-secondary">
+                      ({{ porcentaje(r.factores.conBonusVulnerabilidad, r.factores.reportesConDesglose) }})
+                    </span>
+                  </span>
+                </div>
+                <div class="flex align-items-center justify-content-between gap-2 text-sm">
+                  <span>Reportes con malestar de personas</span>
+                  <span class="font-medium">
+                    {{ r.factores.conPisoNivel1 }}
+                    <span class="text-color-secondary">
+                      ({{ porcentaje(r.factores.conPisoNivel1, r.factores.reportesConDesglose) }})
+                    </span>
+                  </span>
+                </div>
+                <div class="flex align-items-center justify-content-between gap-2 text-sm">
+                  <span>Sin aporte de la IA (F4)</span>
+                  <span class="font-medium">
+                    {{ r.factores.sinAporteIa }}
+                    <span class="text-color-secondary">
+                      ({{ porcentaje(r.factores.sinAporteIa, r.factores.reportesConDesglose) }})
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mezcla de niveles: el gráfico da la proporción, la lista los valores exactos -->
+        <div class="flex flex-column gap-2">
+          <span class="text-sm text-color-secondary">Mezcla de niveles del período</span>
+          @if (hayDatosPeriodo()) {
+            <p-chart type="bar" [data]="mezclaData()" [options]="mezclaOpciones()" height="5rem" />
+            <div class="flex align-items-center flex-wrap gap-3">
+              @for (fila of r.factores.distribucionNivel; track fila.nivel) {
+                <span class="inline-flex align-items-center gap-2 text-sm">
+                  <app-nivel-tag [nivel]="fila.nivel >= 0 ? fila.nivel : null" />
+                  <span class="font-semibold">{{ fila.cantidad }}</span>
+                  <span class="text-color-secondary">
+                    ({{ porcentaje(fila.cantidad, r.situacion.reportesPeriodo) }})
+                  </span>
+                </span>
+              }
+            </div>
+          } @else {
+            <span class="text-sm text-color-secondary">Sin reportes en el período.</span>
+          }
+        </div>
+      </div>
+    </p-card>
+
+    <div class="grid">
+      <!-- 4. Salud del análisis de IA -->
+      <div class="col-12 lg:col-6">
+        <p-card>
+          <div class="flex flex-column gap-3">
+            <div class="flex flex-column gap-1">
+              <h2 class="text-lg font-semibold m-0">Análisis de IA</h2>
+              <span class="text-sm text-color-secondary">
+                Reportes revisados automáticamente en el período. Si la revisión se interrumpe, se nota acá.
+              </span>
+            </div>
+
+            <div class="flex align-items-center flex-wrap gap-3">
+              @for (fila of r.ia.porEstado; track fila.estado) {
+                <div class="flex flex-column">
+                  <span class="text-xs text-color-secondary">{{ estadoIaLabel(fila.estado) }}</span>
+                  <span class="text-xl font-semibold">{{ fila.cantidad }}</span>
+                </div>
+              } @empty {
+                <span class="text-sm text-color-secondary">Sin evaluaciones en el período.</span>
+              }
+            </div>
+
+            <div class="flex flex-column gap-2 text-sm">
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-color-secondary">Con error</span>
+                <span class="font-medium">{{ r.ia.conError }}</span>
+              </div>
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-color-secondary">Intentos promedio por reporte</span>
+                <span class="font-medium">{{ decimal(r.ia.intentosPromedio, 1) }}</span>
+              </div>
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-color-secondary">Demora del análisis</span>
+                <span class="font-medium">{{ duracionDesdeSegundos(r.ia.latenciaSegundos) }}</span>
+              </div>
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-color-secondary">Riesgo promedio de la IA</span>
+                <span class="font-medium">{{ decimal(r.ia.riesgoScorePromedio, 1) }} / 5</span>
+              </div>
+            </div>
+          </div>
+        </p-card>
+      </div>
+
+      <!-- 5. Gestión de alertas -->
+      <div class="col-12 lg:col-6">
+        <p-card>
+          <div class="flex flex-column gap-3">
+            <div class="flex flex-column gap-1">
+              <h2 class="text-lg font-semibold m-0">Gestión de alertas</h2>
+              <span class="text-sm text-color-secondary">
+                Alertas nacidas en el período y cuánto se tarda en atenderlas.
+              </span>
+            </div>
+
+            <div class="flex align-items-center flex-wrap gap-3">
+              @for (fila of r.gestion.porEstado; track fila.estado) {
+                <div class="flex flex-column">
+                  <span class="text-xs text-color-secondary">{{ estadoAlertaLabel(fila.estado) }}</span>
+                  <span class="text-xl font-semibold">{{ fila.cantidad }}</span>
+                </div>
+              } @empty {
+                <span class="text-sm text-color-secondary">Sin alertas en el período.</span>
+              }
+            </div>
+
+            <div class="flex flex-column gap-2 text-sm">
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-color-secondary">Sin atender ahora (Nuevas)</span>
+                <span class="font-medium">{{ r.gestion.sinAtender }}</span>
+              </div>
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-color-secondary">Hasta entrar en revisión</span>
+                <span class="font-medium">{{ duracionDesdeMinutos(r.gestion.minutosHastaRevision) }}</span>
+              </div>
+              <div class="flex align-items-center justify-content-between gap-2">
+                <span class="text-color-secondary">Hasta cerrar o descartar</span>
+                <span class="font-medium">{{ duracionDesdeMinutos(r.gestion.minutosHastaCierre) }}</span>
+              </div>
+            </div>
+
+            <a routerLink="/alertas" class="text-primary no-underline text-sm font-medium">
+              Ir a alertas <i class="pi pi-arrow-right text-xs"></i>
+            </a>
+          </div>
+        </p-card>
+      </div>
+
+      <!-- 6a. Canales -->
+      <div class="col-12 lg:col-5">
+        <p-card>
+          <div class="flex flex-column gap-3">
+            <h2 class="text-lg font-semibold m-0">Canales</h2>
+            @for (fila of r.canales; track fila.canal) {
+              <div class="flex flex-column gap-1">
+                <div class="flex align-items-center justify-content-between gap-2 text-sm">
+                  <span class="inline-flex align-items-center gap-2">
+                    <i [class]="canalIcono(fila.canal)"></i>{{ canalLabel(fila.canal) }}
+                  </span>
+                  <span>
+                    <span class="font-semibold">{{ fila.cantidad }}</span>
+                    <span class="text-color-secondary">
+                      ({{ porcentaje(fila.cantidad, r.situacion.reportesPeriodo) }})
+                    </span>
+                  </span>
+                </div>
+                <p-progressbar
+                  [value]="(fila.cantidad / r.situacion.reportesPeriodo) * 100"
+                  [showValue]="false"
+                  styleClass="h-1rem"
+                />
+              </div>
+            } @empty {
+              <span class="text-sm text-color-secondary">Sin reportes en el período.</span>
+            }
+          </div>
+        </p-card>
+      </div>
+
+      <!-- 6b. Puntos críticos -->
+      <div class="col-12 lg:col-7">
+        <p-card>
+          <div class="flex flex-column gap-3">
+            <div class="flex flex-column gap-1">
+              <h2 class="text-lg font-semibold m-0">Puntos críticos con más reportes</h2>
+              <span class="text-sm text-color-secondary">Activos ahora, ordenados por cantidad.</span>
+            </div>
+
+            @if (r.topPuntosCriticos.length === 0) {
+              <span class="text-sm text-color-secondary">No hay puntos críticos activos.</span>
+            } @else {
+              <p-table [value]="r.topPuntosCriticos" [tableStyle]="{ 'min-width': '20rem' }">
+                <ng-template #header>
+                  <tr>
+                    <th style="width: 5rem">Punto</th>
+                    <th style="width: 7rem">Nivel</th>
+                    <th>Reportes</th>
+                    <th style="width: 8rem"></th>
+                  </tr>
+                </ng-template>
+                <ng-template #body let-p>
+                  <tr>
+                    <td class="font-medium">#{{ p.id }}</td>
+                    <td><app-nivel-tag [nivel]="p.nivel" /></td>
+                    <td>{{ p.cantidadReportes }}</td>
+                    <td class="text-right">
+                      <a [routerLink]="rutaPunto(p)" class="text-primary no-underline text-sm font-medium">
+                        @if (p.alertaId) {
+                          Ver alerta
+                        } @else {
+                          Ver en mapa
+                        }
+                        <i class="pi pi-arrow-right text-xs"></i>
+                      </a>
+                    </td>
+                  </tr>
+                </ng-template>
+              </p-table>
+            }
+          </div>
+        </p-card>
+      </div>
+    </div>
+  }
+</div>

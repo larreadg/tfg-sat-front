@@ -1,0 +1,73 @@
+/*
+ * CSS propio justificado (CLAUDE.md §1.4): PrimeFlex no tiene utilidades para
+ * pintar un color arbitrario del tema, y la regla de color del proyecto exige
+ * variables `--p-*`. Se resuelve con una variable local por tono, así el markup
+ * queda declarativo (`tono-amber`) y ningún color se escribe a mano.
+ *
+ * No se tocan clases internas de PrimeNG: todo esto cuelga del contenido propio
+ * que se proyecta dentro del `p-accordion-header`.
+ */
+
+.seccion-header {
+  // El header de PrimeNG ya trae su padding; acá solo se alinea el contenido.
+  min-height: 2.75rem;
+
+  /*
+   * El `p-accordion-header` pinta su contenido con el color y el peso del
+   * encabezado (y en primary cuando está activo). Sobre ese contenido, las clases
+   * de texto de PrimeFlex pierden por especificidad, así que el color propio se
+   * fija acá. Es el contenido proyectado, no el chrome del componente.
+   *
+   * Se deja neutro incluso activo: el estado ya lo dicen el ícono asentado y el
+   * chevron, y cinco títulos en primary competirían con los tonos de sección.
+   */
+  .titulo-seccion {
+    color: var(--p-text-color);
+    font-weight: 600;
+  }
+
+  .subtitulo-seccion {
+    color: var(--p-text-muted-color);
+    font-weight: 400;
+  }
+}
+
+/*
+ * Un tono por sección. Los tonos de la paleta (`--p-amber-50`, `--p-teal-700`…)
+ * NO cambian con el esquema de color —solo lo hacen los tokens semánticos—, así
+ * que en tema oscuro la caja del ícono quedaría como un recorte claro sobre el
+ * panel. `light-dark()` resuelve con el `color-scheme` que declara `styles.scss`:
+ * en claro el par 50/700 de siempre, en oscuro el tono al 400 sobre un fondo
+ * teñido y translúcido, que es la misma receta que usa el tema para `highlight`.
+ */
+// Entre comillas: sin ellas Sass lee `indigo` y `teal` como valores de color.
+$tonos: 'primary', 'amber', 'indigo', 'rose', 'teal';
+
+@each $tono in $tonos {
+  .tono-#{$tono} {
+    --tono-icono: light-dark(var(--p-#{$tono}-700), var(--p-#{$tono}-400));
+    --tono-fondo: light-dark(
+      var(--p-#{$tono}-50),
+      color-mix(in srgb, var(--p-#{$tono}-400), transparent 86%)
+    );
+  }
+}
+
+.caja-icono {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--p-content-border-radius);
+  background: var(--tono-fondo);
+  color: var(--tono-icono);
+
+  i {
+    font-size: 1.05rem;
+  }
+}
+
+.titulo-seccion {
+  // Un escalón sobre el cuerpo (1.125 de ratio), suficiente para leerse como
+  // encabezado sin competir con el título de la pantalla.
+  font-size: 1.0625rem;
+  line-height: 1.3;
+}

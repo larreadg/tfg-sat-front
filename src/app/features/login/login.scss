@@ -29,16 +29,3 @@
   background: color-mix(in srgb, var(--p-primary-300) 25%, transparent);
 }
 
-// El captcha llega como SVG crudo inyectado vía [innerHTML]; Angular no aplica
-// encapsulamiento de estilos a contenido insertado en runtime, de ahí el ::ng-deep.
-.captcha-box {
-  width: 8.25rem;
-  height: 2.75rem;
-  overflow: hidden;
-
-  ::ng-deep svg {
-    display: block;
-    width: 100%;
-    height: 100%;
-  }
-}
