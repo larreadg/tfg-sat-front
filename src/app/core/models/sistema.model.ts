@@ -14,6 +14,11 @@ export interface CanalesSistema {
   whatsapp: boolean;
 }
 
+/** Canal de salida por correo. Se configura en el servidor, no desde el panel. */
+export interface CorreoSistema {
+  habilitado: boolean;
+}
+
 export interface IaSistema {
   modelo: string;
   /** Expresión cron del job que evalúa los reportes pendientes. */
@@ -40,56 +45,8 @@ export interface EstadoSistema {
   /** `'desconocida'` si el backend no se arrancó vía npm. */
   version: string;
   canales: CanalesSistema;
+  correo: CorreoSistema;
   ia: IaSistema;
   encuestaActiva: EncuestaActivaSistema | null;
   configuracionActiva: ConfiguracionActivaSistema | null;
-}
-
-// --- Transporte SMTP (tab Sistema) ------------------------------------------
-
-/** Espeja el enum de `smtpSeguridad` del backend. */
-export type SeguridadSmtp = 'NINGUNA' | 'STARTTLS' | 'SSL_TLS';
-
-/**
- * Transporte SMTP (`GET /admin/configuracion/notificaciones`): con qué servidor se
- * manda, y nada más.
- *
- * Deliberadamente sin remitente ni destinatarios: el remitente se configura en la
- * pantalla **Webhooks** y los destinatarios son parte de cada regla. Acá tampoco
- * hay contraseña: el backend nunca la devuelve, ni enmascarada; solo se sabe si
- * hay una guardada (`tieneContrasena`).
- */
-export interface ConfiguracionNotificacion {
-  smtpHabilitado: boolean;
-  smtpHost: string;
-  smtpPuerto: number;
-  smtpSeguridad: SeguridadSmtp;
-  smtpUsuario: string;
-  tieneContrasena: boolean;
-  /** `false` si al backend le falta `CONFIG_ENCRYPTION_KEY`: no puede guardar contraseñas. */
-  cifradoDisponible: boolean;
-  /** El `From` con el que saldría un correo hoy. Informativo: esta pantalla no lo edita. */
-  remitenteEfectivo: string;
-  actualizadoPor: { id: number; nombreCompleto: string; correoElectronico: string } | null;
-  fechaActualizacion: string | null;
-}
-
-/**
- * Body del `PUT`. `smtpContrasena` es de tres estados:
- *   - ausente (`undefined`) → conservar la guardada.
- *   - `null`               → borrarla (SMTP sin autenticación).
- *   - string               → reemplazarla.
- */
-export interface ActualizarNotificacionInput {
-  smtpHabilitado: boolean;
-  smtpHost: string;
-  smtpPuerto: number;
-  smtpSeguridad: SeguridadSmtp;
-  smtpUsuario: string;
-  smtpContrasena?: string | null;
-}
-
-export interface ResultadoPruebaCorreo {
-  destinatario: string;
-  duracionMs: number;
 }

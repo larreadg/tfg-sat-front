@@ -106,7 +106,7 @@ export interface CabeceraWebhookInput {
 
 /**
  * Una regla. No hay campo con el secreto de firma ni con el valor de las cabeceras:
- * el backend nunca los devuelve, igual que la contraseña SMTP; solo se sabe que
+ * el backend nunca los devuelve; solo se sabe que
  * existen (`tieneSecretoFirma`, `cabeceras[].tieneValor`).
  */
 export interface ReglaWebhook {
@@ -136,8 +136,7 @@ export interface ReglaWebhook {
 }
 
 /**
- * Body del POST/PUT. `secretoFirma` es de tres estados, igual que la contraseña
- * SMTP: ausente = conservar el guardado, `null` = borrarlo, string = reemplazarlo.
+ * Body del POST/PUT. `secretoFirma` es de tres estados: ausente = conservar el guardado, `null` = borrarlo, string = reemplazarlo.
  */
 export interface GuardarReglaInput {
   nombre: string;
@@ -158,10 +157,12 @@ export interface GuardarReglaInput {
 export interface Remitente {
   remitenteNombre: string;
   remitenteCorreo: string;
-  /** El `From` real que se usaría hoy (cae al usuario SMTP si no hay remitente). */
+  /** El `From` real que se usaría hoy (cae a `remitentePorDefecto` si no hay remitente). */
   remitenteEfectivo: string;
-  smtpHabilitado: boolean;
-  smtpUsuario: string;
+  /** El `From` del servidor cuando acá no se define uno. */
+  remitentePorDefecto: string;
+  /** `false` si el servidor no tiene con qué mandar correos. */
+  correoDisponible: boolean;
 }
 
 export interface ActualizarRemitenteInput {

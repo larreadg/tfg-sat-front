@@ -21,21 +21,13 @@
     <p-skeleton height="12rem" borderRadius="0.75rem" />
     <p-skeleton height="18rem" borderRadius="0.75rem" />
   } @else if (catalogo(); as cat) {
-    <!-- Avisos que se arreglan en OTRA pantalla: se dicen arriba y con el link. -->
-    @if (smtpApagado()) {
+    <!-- Aviso que no se arregla desde el panel: se dice arriba de todo. -->
+    @if (correoNoDisponible()) {
       <p-message severity="warn" styleClass="w-full">
-        <div class="flex align-items-center justify-content-between gap-3 w-full flex-wrap">
-          <span class="text-sm">
-            El envío de correos está deshabilitado: las reglas de correo no van a mandar nada.
-          </span>
-          <a
-            [routerLink]="['/configuracion']"
-            [queryParams]="{ tab: 'sistema' }"
-            class="text-sm font-medium white-space-nowrap"
-          >
-            Configurar el correo →
-          </a>
-        </div>
+        <span class="text-sm">
+          Por ahora el envío de correos no está disponible: las reglas de correo no van a mandar nada. Pedile a quien
+          administra el sistema que lo active.
+        </span>
       </p-message>
     }
 
@@ -85,7 +77,7 @@
             <label for="remitenteCorreo" class="block text-sm font-medium mb-2">
               Correo
               <span class="text-color-secondary font-normal">
-                (si lo dejás vacío se usa la cuenta configurada en Sistema)
+                (si lo dejás vacío se usa {{ remitente()?.remitentePorDefecto }})
               </span>
             </label>
             <input
@@ -106,9 +98,9 @@
           <div class="col-12 mt-3">
             <div class="flex flex-column sm:flex-row gap-2 sm:align-items-center sm:justify-content-between">
               <small class="text-color-secondary">
-                Es el remitente que van a ver las personas que reciban los avisos. Si lo dejás vacío se usa la
-                cuenta de correo configurada en Configuración → Sistema, que además es lo que proveedores como
-                Gmail u Office 365 exigen de todas formas.
+                Es el remitente que van a ver las personas que reciban los avisos. Tiene que ser una dirección
+                autorizada para enviar desde este sistema: si no lo está, los avisos se rechazan y el motivo queda
+                en el historial de cada regla.
               </small>
               @if (puedeEditar) {
                 <p-button

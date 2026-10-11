@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
@@ -39,16 +38,14 @@ const TAMANO_PAGINA = 20;
  * (`GET /admin/webhooks/eventos`), así que esta pantalla no sabe qué eventos existen:
  * los muestra.
  *
- * El remitente de los correos vive acá y no en Configuración > Sistema a propósito:
- * esa pantalla configura el servidor con el que se envía (infraestructura), esta
- * define qué se avisa y con qué cara sale.
+ * El remitente de los correos vive acá: el canal (el servicio externo de correo) se
+ * configura en el servidor, esta pantalla define qué se avisa y con qué cara sale.
  */
 @Component({
   selector: 'app-webhooks',
   imports: [
     FormsModule,
     ReactiveFormsModule,
-    RouterLink,
     ButtonModule,
     CardModule,
     ConfirmDialogModule,
@@ -121,10 +118,10 @@ export class Webhooks {
   ]);
 
   /**
-   * Sin SMTP habilitado, cualquier regla de correo es decorativa. Se avisa arriba de
-   * todo porque se arregla en otra pantalla y el usuario no tiene por qué deducirlo.
+   * Sin correo disponible en el servidor, cualquier regla de correo es decorativa.
+   * Se avisa arriba de todo porque no se arregla desde el panel.
    */
-  readonly smtpApagado = computed(() => this.remitente()?.smtpHabilitado === false);
+  readonly correoNoDisponible = computed(() => this.remitente()?.correoDisponible === false);
 
   readonly reglasConProblema = computed(() => this.reglas().filter((regla) => regla.advertencia !== null));
 
