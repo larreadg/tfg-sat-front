@@ -4,8 +4,9 @@
   <div class="flex flex-column gap-2">
     <h1 class="text-2xl font-semibold m-0">Zonas de riesgo</h1>
     <p class="text-color-secondary m-0">
-      Zonas dibujadas a mano sobre el mapa, cada una con su criticidad. Son la fuente del factor <strong>F5</strong>
-      del motor: un reporte que cae dentro de una zona recibe el puntaje de esa zona.
+      El mapa de riesgo es la fuente del factor <strong>F5</strong> del motor. Tiene una base fija, la malla de riesgo,
+      y encima las zonas que se dibujan a mano, cada una con su criticidad: un reporte recibe el puntaje del lugar
+      donde cae.
     </p>
   </div>
 
@@ -16,8 +17,8 @@
            que se aplaste en pantallas angostas (ahí baja a su propia línea). -->
       <div class="flex flex-column gap-2 flex-1 min-w-min">
         <p class="text-color-secondary m-0">
-          Si un reporte cae dentro de <strong>varias zonas superpuestas</strong>, gana la de criticidad más alta:
-          agregar una zona al mapa nunca le baja el puntaje a un reporte que ya estaba cubierto.
+          Si un reporte cae dentro de <strong>varias zonas superpuestas</strong> (la malla incluida), gana la de
+          criticidad más alta: agregar una zona al mapa nunca le baja el puntaje a un reporte que ya estaba cubierto.
         </p>
       </div>
 
@@ -51,7 +52,7 @@
       </div>
     </div>
 
-    @if (activas() === 0) {
+    @if (activas() === 0 && !malla()) {
       <p-message severity="info" styleClass="w-full">
         <span class="text-sm">
           Sin ninguna zona activa, F5 no participa del cálculo: su peso se reparte entre los demás factores. En cuanto
@@ -79,6 +80,49 @@
       role="application"
       aria-label="Mapa para dibujar zonas de riesgo"
     ></div>
+
+    <!--
+      La malla va aparte y no como una fila más de la tabla: las filas tienen
+      editar y eliminar, y la malla no admite ninguna de las dos.
+    -->
+    @if (malla(); as m) {
+      <div class="flex flex-column gap-3 p-3 border-1 surface-border border-round-lg">
+        <div class="flex align-items-start justify-content-between gap-3">
+          <div class="flex flex-column gap-1 flex-1 min-w-0">
+            <div class="flex align-items-center flex-wrap gap-2">
+              <span class="font-medium text-color">{{ m.nombre }}</span>
+              <p-tag value="Fija" icon="pi pi-lock" severity="secondary" [rounded]="true" />
+            </div>
+            <small class="text-color-secondary line-height-3">
+              Cubre Gran Asunción y alrededores en celdas de unos {{ m.resolucionMetros }} m. Viene cargada con el
+              sistema: no se puede editar, desactivar ni eliminar. Siempre cuenta para F5, y una zona dibujada encima
+              solo puede subir el puntaje. Fuera de su cobertura cuentan solo las zonas dibujadas.
+            </small>
+          </div>
+          <p-button
+            icon="pi pi-map-marker"
+            [text]="true"
+            [rounded]="true"
+            size="small"
+            severity="secondary"
+            ariaLabel="Centrar el mapa en la malla de riesgo"
+            pTooltip="Centrar el mapa acá"
+            tooltipPosition="left"
+            (onClick)="enfocarMalla()"
+          />
+        </div>
+        <div class="flex flex-wrap gap-3" aria-label="Colores de la malla de riesgo">
+          @for (tramo of tramosMalla(); track tramo.criticidad) {
+            <span class="flex align-items-center gap-2 text-sm">
+              <!-- Color del mapa (Leaflet), no del tema: ver `tramosMalla` -->
+              <span class="w-1rem h-1rem border-round-sm flex-shrink-0" [style.background]="tramo.color"></span>
+              <span>{{ tramo.etiqueta }}</span>
+              <span class="text-color-secondary">índice {{ tramo.desde }}–{{ tramo.hasta }}, F5 = {{ tramo.puntajeF5 }}</span>
+            </span>
+          }
+        </div>
+      </div>
+    }
 
     <p-table
       [value]="zonas()"

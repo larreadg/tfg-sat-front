@@ -12,6 +12,8 @@ import {
 } from '@angular/core';
 import * as L from 'leaflet';
 import { colorNivel } from '../etiquetas/nivel-colores';
+import { MallaRiesgo } from '../../core/models/zona-riesgo.model';
+import { asegurarPaneMalla, crearCapaMalla } from './capa-malla';
 
 export interface PuntoMapa {
   lat: number;
@@ -91,6 +93,11 @@ export class LeafletMap implements AfterViewInit, OnDestroy {
    * reportes, no elementos que se seleccionen. Pasar `[]` las apaga.
    */
   readonly poligonos = input<PoligonoMapa[]>([]);
+  /**
+   * Malla de riesgo base, pintada DEBAJO de las zonas dibujadas (su propio pane)
+   * y sin capturar el mouse. `null` la saca del mapa.
+   */
+  readonly malla = input<MallaRiesgo | null>(null);
   readonly centro = input<[number, number] | null>(null);
   readonly zoom = input<number>(14);
   readonly altura = input<string>('320px');
@@ -136,6 +143,10 @@ export class LeafletMap implements AfterViewInit, OnDestroy {
   private capaMarcadores?: L.LayerGroup;
   /** Capa propia: prenderla o apagarla no toca ni redibuja los marcadores. */
   private capaPoligonos?: L.LayerGroup;
+  /** Imagen de la malla ya armada, por malla: apagarla y prenderla no la repinta. */
+  private capaMalla?: { malla: MallaRiesgo; capa: L.ImageOverlay };
+  /** Descarta un armado de la malla que termina después de que ya se pidió otro. */
+  private versionMalla = 0;
   private observadorTamano?: ResizeObserver;
 
   /** Centro por defecto cuando no hay puntos ni centro explícito (Asunción, PY). */
@@ -161,6 +172,13 @@ export class LeafletMap implements AfterViewInit, OnDestroy {
       const puntos = this.puntos();
       if (this.mapa && this.capaMarcadores) {
         this.dibujarMarcadores(puntos);
+      }
+    });
+
+    effect(() => {
+      const malla = this.malla();
+      if (this.mapa) {
+        void this.dibujarMalla(malla);
       }
     });
 
@@ -210,6 +228,9 @@ export class LeafletMap implements AfterViewInit, OnDestroy {
       maxZoom: 21
     }).addTo(this.mapa);
 
+    asegurarPaneMalla(this.mapa);
+    void this.dibujarMalla(this.malla());
+
     // Los polígonos se agregan ANTES que los marcadores: en Leaflet, el orden de
     // alta define el orden de pintado dentro del mismo pane, así que al revés un
     // relleno de zona taparía los pines.
@@ -239,6 +260,38 @@ export class LeafletMap implements AfterViewInit, OnDestroy {
     this.mapa = undefined;
     this.capaMarcadores = undefined;
     this.capaPoligonos = undefined;
+    this.capaMalla = undefined;
+  }
+
+  /**
+   * Prende, apaga o cambia la malla. El armado es asíncrono (descomprime las
+   * celdas), así que si mientras tanto se pidió otra cosa, el resultado viejo se
+   * descarta en vez de pisar al nuevo.
+   */
+  private async dibujarMalla(malla: MallaRiesgo | null): Promise<void> {
+    const version = ++this.versionMalla;
+    if (this.capaMalla && this.capaMalla.malla !== malla) {
+      this.capaMalla.capa.remove();
+    }
+    if (!malla || !this.mapa) {
+      this.capaMalla?.capa.remove();
+      return;
+    }
+
+    if (this.capaMalla?.malla !== malla) {
+      try {
+        const capa = await crearCapaMalla(malla);
+        this.capaMalla = { malla, capa };
+      } catch (err) {
+        // Sin la malla el mapa sigue sirviendo: solo falta el fondo de riesgo.
+        console.error('[leaflet-map] No se pudo dibujar la malla de riesgo.', err);
+        return;
+      }
+    }
+
+    if (version === this.versionMalla && this.mapa && this.capaMalla?.malla === malla) {
+      this.capaMalla.capa.addTo(this.mapa);
+    }
   }
 
   /**

@@ -85,3 +85,13 @@ body {
     color: var(--p-primary-color);
   }
 }
+
+/*
+ * Malla de riesgo base (`shared/leaflet-map/capa-malla.ts`): cada pixel de la
+ * imagen es una celda de ~87 m del relevamiento. Sin esto el navegador suaviza
+ * al ampliar y dibuja degradés entre celdas, que el dato no tiene: un borde
+ * borroso sugiere una precisión que no existe. Es DOM de Leaflet, por eso global.
+ */
+.capa-malla-riesgo {
+  image-rendering: pixelated;
+}

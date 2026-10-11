@@ -56,3 +56,34 @@ export interface CrearZonaRiesgoInput {
 }
 
 export type ActualizarZonaRiesgoInput = Partial<CrearZonaRiesgoInput>;
+
+/**
+ * Malla de riesgo base: la zona "por defecto". No se dibuja a mano: viene de un
+ * relevamiento cargado con el sistema, cubre Gran Asunción y alrededores, y no se
+ * puede editar, desactivar ni eliminar. En F5 convive con las zonas dibujadas con
+ * la misma regla que ellas entre sí: gana la criticidad más alta.
+ */
+export interface MallaRiesgo {
+  nombre: string;
+  fuente: string;
+  generada: string;
+  resolucionMetros: number;
+  limites: { minLat: number; maxLat: number; minLng: number; maxLng: number };
+  ancho: number;
+  alto: number;
+  /**
+   * Celdas fila por fila desde el norte (filas espaciadas en Web Mercator, para que
+   * Leaflet las estire sin corrimiento), comprimidas con zlib y en base64. Cada
+   * byte: 0 = sin dato, 1..5 = `tramos[valor - 1]`.
+   */
+  celdas: string;
+  tramos: TramoMalla[];
+}
+
+/** Rango del índice de la malla (0–100) que corresponde a una criticidad. */
+export interface TramoMalla {
+  desde: number;
+  hasta: number;
+  criticidad: CriticidadZona;
+  puntajeF5: number;
+}

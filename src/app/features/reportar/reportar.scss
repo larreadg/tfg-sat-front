@@ -23,3 +23,24 @@
     display: none;
   }
 }
+
+// Miniaturas del resumen: PrimeFlex no tiene utilidad de `object-fit`, y sin
+// `cover` una foto vertical del celular queda aplastada dentro del cuadrado.
+.miniatura {
+  object-fit: cover;
+  border: 1px solid var(--p-content-border-color);
+}
+
+// Círculo del check de éxito. No hay componente PrimeNG para un ícono con fondo;
+// los tokens de "highlight" son semánticos, así que siguen al tema claro/oscuro.
+.exito-icono {
+  background: var(--p-highlight-background);
+  color: var(--p-highlight-color);
+}
+
+// El número de reporte se dicta o se copia a mano: cifras de ancho fijo y un poco
+// de aire entre caracteres para que no se confundan (0/O, 1/l).
+.codigo-reporte {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}

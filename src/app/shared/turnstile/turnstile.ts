@@ -16,10 +16,10 @@ import { environment } from '../../../environments/environment';
 
 /** Superficie mínima del API global que expone el script de Turnstile. */
 interface TurnstileApi {
-  render(elemento: HTMLElement, opciones: Record<string, unknown>): string;
-  execute(widgetId: string, opciones?: Record<string, unknown>): void;
-  reset(widgetId?: string): void;
-  remove(widgetId: string): void;
+  render(elemento: HTMLElement, opciones: Record<string, unknown>): string | undefined;
+  execute(contenedor: HTMLElement, opciones?: Record<string, unknown>): void;
+  reset(contenedor?: HTMLElement): void;
+  remove(contenedor: HTMLElement): void;
 }
 
 const SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
@@ -88,11 +88,17 @@ export class Turnstile implements AfterViewInit, OnDestroy {
   readonly accion = input<string>('');
 
   readonly fallo = signal(false);
+  /**
+   * `true` mientras Cloudflare espera que la persona toque la casilla. Con
+   * `interaction-only` el widget aparece de golpe en ese momento: el formulario
+   * lo lee para explicar qué se espera, en vez de dejar un spinner mudo.
+   */
+  readonly requiereInteraccion = signal(false);
 
   private readonly contenedor = viewChild.required<ElementRef<HTMLDivElement>>('contenedor');
   private readonly zone = inject(NgZone);
 
-  private widgetId?: string;
+  private renderizado = false;
   private listo?: Promise<void>;
   /** Resolutor del `obtenerToken()` en curso: lo completa el callback del widget. */
   private pendiente?: { resolver: (token: string) => void; rechazar: (error: Error) => void };
@@ -114,7 +120,7 @@ export class Turnstile implements AfterViewInit, OnDestroy {
     await this.listo;
 
     const api = apiTurnstile();
-    if (!api || !this.widgetId) {
+    if (!api || !this.renderizado) {
       throw new Error('La verificación anti-bot no está disponible.');
     }
 
@@ -127,24 +133,30 @@ export class Turnstile implements AfterViewInit, OnDestroy {
 
     return new Promise<string>((resolver, rechazar) => {
       this.pendiente = { resolver, rechazar };
-      api.execute(this.widgetId!);
+      // Se pasa el contenedor + opciones, no el id: si Cloudflare descartó el
+      // widget (lo hace solo cuando su contenedor sale del DOM por un momento,
+      // p. ej. al re-renderizar el paso del stepper), `execute(id)` falla con
+      // "Please provide 2 parameters to execute". Con las opciones lo vuelve a
+      // montar en el mismo contenedor y lo ejecuta.
+      api.execute(this.contenedor().nativeElement, this.opciones());
     });
   }
 
   ngOnDestroy(): void {
-    if (this.widgetId) {
-      apiTurnstile()?.remove(this.widgetId);
-      this.widgetId = undefined;
+    if (this.renderizado) {
+      apiTurnstile()?.remove(this.contenedor().nativeElement);
+      this.renderizado = false;
     }
   }
 
   /** Descarta el token actual. Obligatorio después de un intento fallido. */
   reset(): void {
     this.token.set(null);
+    this.requiereInteraccion.set(false);
     this.pendiente?.rechazar(new Error('Verificación cancelada.'));
     this.pendiente = undefined;
-    if (this.widgetId) {
-      apiTurnstile()?.reset(this.widgetId);
+    if (this.renderizado) {
+      apiTurnstile()?.reset(this.contenedor().nativeElement);
     }
   }
 
@@ -155,16 +167,24 @@ export class Turnstile implements AfterViewInit, OnDestroy {
       return;
     }
 
+    this.renderizado = api.render(this.contenedor().nativeElement, this.opciones()) !== undefined;
+  }
+
+  /** Opciones del widget; también se usan para re-montarlo desde `obtenerToken()`. */
+  private opciones(): Record<string, unknown> {
     // Los callbacks los dispara el script de Cloudflare, fuera de Angular.
-    this.widgetId = api.render(this.contenedor().nativeElement, {
+    return {
       sitekey: environment.turnstileSiteKey,
       action: this.accion() || undefined,
       // El desafio corre cuando el formulario llama a `obtenerToken()`.
       execution: 'execute',
       // Sin interaccion necesaria, el widget no ocupa lugar en el formulario.
       appearance: 'interaction-only',
+      'before-interactive-callback': () => this.zone.run(() => this.requiereInteraccion.set(true)),
+      'after-interactive-callback': () => this.zone.run(() => this.requiereInteraccion.set(false)),
       callback: (token: string) =>
         this.zone.run(() => {
+          this.requiereInteraccion.set(false);
           this.token.set(token);
           this.pendiente?.resolver(token);
           this.pendiente = undefined;
@@ -172,17 +192,19 @@ export class Turnstile implements AfterViewInit, OnDestroy {
       'expired-callback': () => this.zone.run(() => this.token.set(null)),
       'timeout-callback': () =>
         this.zone.run(() => {
+          this.requiereInteraccion.set(false);
           this.token.set(null);
           this.pendiente?.rechazar(new Error('La verificación tardó demasiado. Intentá de nuevo.'));
           this.pendiente = undefined;
         }),
       'error-callback': () =>
         this.zone.run(() => {
+          this.requiereInteraccion.set(false);
           this.token.set(null);
           this.fallo.set(true);
           this.pendiente?.rechazar(new Error('La verificación anti-bot falló.'));
           this.pendiente = undefined;
         })
-    });
+    };
   }
 }

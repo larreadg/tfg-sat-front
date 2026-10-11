@@ -15,7 +15,7 @@ import { ApiResponse } from '../../core/models/api-response.model';
 import { MapaFiltros, MapaGeoJson, PropiedadesPuntoCritico, PropiedadesReporte } from '../../core/models/mapa.model';
 import { Canal, EstadoEvaluacionIa } from '../../core/models/reporte.model';
 import { permiso, RECURSO } from '../../core/models/permiso.model';
-import { ETIQUETA_CRITICIDAD_ZONA, ZonaRiesgo } from '../../core/models/zona-riesgo.model';
+import { ETIQUETA_CRITICIDAD_ZONA, MallaRiesgo, ZonaRiesgo } from '../../core/models/zona-riesgo.model';
 import { FiltrosPanel } from '../../shared/filtros-panel/filtros-panel';
 import {
   etiquetaOpcion,
@@ -82,6 +82,10 @@ export class Mapa {
 
   readonly zonas = signal<ZonaRiesgo[]>([]);
 
+  /** Malla de riesgo base. Va con el mismo check que las zonas: es una zona más. */
+  readonly malla = signal<MallaRiesgo | null>(null);
+  readonly mallaVisible = computed(() => (this.mostrarZonas() ? this.malla() : null));
+
   /**
    * Las zonas ya traducidas a polígonos del mapa. Apagar el check pasa `[]`, y el
    * mapa limpia su capa de áreas sin tocar los marcadores ni el encuadre.
@@ -112,7 +116,7 @@ export class Mapa {
   });
 
   /** Cuántas zonas se están dibujando ahora mismo (para la leyenda). */
-  readonly cantidadZonas = computed(() => this.poligonosZonas().length);
+  readonly cantidadZonas = computed(() => this.poligonosZonas().length + (this.mallaVisible() ? 1 : 0));
 
   readonly hoy = new Date();
   readonly nivelesLeyenda = [0, 1, 2, 3];
@@ -224,6 +228,8 @@ export class Mapa {
    * avisa y la capa queda vacía.
    */
   private cargarZonas(): void {
+    // Si la malla no está, `obtenerMalla()` emite `null`: el mapa sigue igual.
+    this.zonasService.obtenerMalla().subscribe((malla) => this.malla.set(malla));
     this.zonasService.listar().subscribe({
       next: (res) => this.zonas.set(res.data ?? []),
       error: () => {

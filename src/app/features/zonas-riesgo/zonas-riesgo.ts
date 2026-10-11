@@ -33,11 +33,13 @@ import {
   CRITICIDADES_ZONA,
   CriticidadZona,
   ETIQUETA_CRITICIDAD_ZONA,
+  MallaRiesgo,
   PUNTAJE_F5_ZONA,
   VerticeZona,
   ZonaRiesgo
 } from '../../core/models/zona-riesgo.model';
 import { colorCriticidadZona } from '../../shared/etiquetas/nivel-colores';
+import { asegurarPaneMalla, crearCapaMalla, limitesMalla } from '../../shared/leaflet-map/capa-malla';
 import { escaparHtml } from '../../shared/escapar-html';
 
 /**
@@ -89,6 +91,25 @@ export class ZonasRiesgo implements AfterViewInit, OnDestroy {
 
   readonly zonas = signal<ZonaRiesgo[]>([]);
   readonly cargando = signal(false);
+
+  /**
+   * Malla de riesgo base: la zona "por defecto". Fija: no entra a la tabla (que
+   * tiene editar y eliminar) ni a Geoman; se muestra aparte, solo para mirar.
+   */
+  readonly malla = signal<MallaRiesgo | null>(null);
+
+  /**
+   * Leyenda de la malla. El color es el mismo que pinta el mapa (y que usan las
+   * zonas dibujadas): es la excepción documentada en `nivel-colores.ts`, porque la
+   * leyenda tiene que coincidir con lo que pinta Leaflet, no con el tema.
+   */
+  readonly tramosMalla = computed(() =>
+    (this.malla()?.tramos ?? []).map((tramo) => ({
+      ...tramo,
+      etiqueta: ETIQUETA_CRITICIDAD_ZONA[tramo.criticidad],
+      color: colorCriticidadZona(tramo.criticidad)
+    }))
+  );
   readonly guardando = signal(false);
 
   /** Zona que el diálogo está editando. `null` con el diálogo abierto = alta nueva. */
@@ -148,6 +169,9 @@ export class ZonasRiesgo implements AfterViewInit, OnDestroy {
       maxNativeZoom: 19,
       maxZoom: 21
     }).addTo(this.mapa);
+
+    asegurarPaneMalla(this.mapa);
+    this.cargarMalla();
 
     if (this.puedeCrear || this.puedeEditar) {
       this.configurarGeoman();
@@ -248,6 +272,35 @@ export class ZonasRiesgo implements AfterViewInit, OnDestroy {
   }
 
   // --- Datos ---
+
+  /** Si no hay malla, la pantalla queda como antes: solo zonas dibujadas. */
+  private cargarMalla(): void {
+    this.service.obtenerMalla().subscribe(async (malla) => {
+      this.malla.set(malla);
+      if (!malla) {
+        return;
+      }
+      try {
+        const capa = await crearCapaMalla(malla);
+        if (this.mapa) {
+          capa.addTo(this.mapa);
+        }
+      } catch {
+        this.messageService.add({
+          severity: 'warn',
+          summary: 'Malla de riesgo',
+          detail: 'No se pudo dibujar la malla de riesgo base en el mapa. Las zonas dibujadas siguen disponibles.'
+        });
+      }
+    });
+  }
+
+  enfocarMalla(): void {
+    const malla = this.malla();
+    if (malla && this.mapa) {
+      this.mapa.fitBounds(limitesMalla(malla));
+    }
+  }
 
   private cargar(): void {
     this.cargando.set(true);

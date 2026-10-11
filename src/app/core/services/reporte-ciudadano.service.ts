@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, tap } from 'rxjs';
+import { HttpClient, HttpEventType, HttpHeaders } from '@angular/common/http';
+import { Observable, filter, finalize, map, tap } from 'rxjs';
 import { ApiResponse } from '../models/api-response.model';
 import { Encuesta, RespuestaEnvio } from '../models/encuesta.model';
 import { environment } from '../../../environments/environment';
@@ -19,7 +19,10 @@ interface VerificarCodigoResponseData {
   token: string;
 }
 
-interface EnviarReporteResponseData {
+export interface EnviarReporteResponseData {
+  reporteId: number;
+  /** Código que el ciudadano puede guardar para consultar su reporte (ej. AGD-0000012). */
+  codigoPublico: string;
   encuestaId: number;
   validacionSmsId: number;
   respuestaIds: number[];
@@ -35,6 +38,12 @@ export class ReporteCiudadanoService {
   readonly stage = signal<VerificacionStage>('telefono');
   readonly loading = signal(false);
   readonly identidadVerificada = signal(false);
+  /**
+   * Porcentaje (0-100) de las fotos ya subidas durante `enviarReporte`; `null`
+   * fuera del envío. Llegar a 100 no es terminar: después el servidor todavía
+   * comprime las fotos y registra el reporte, y eso puede tardar unos segundos.
+   */
+  readonly progresoSubida = signal<number | null>(null);
 
   /** El token de Turnstile es de un solo uso: ante error hay que resetear el widget. */
   login(telefono: string, turnstileToken: string): Observable<ApiResponse<LoginResponseData>> {
@@ -85,7 +94,12 @@ export class ReporteCiudadanoService {
     return this.http.get<ApiResponse<Encuesta>>(ENCUESTA_ACTIVA_URL);
   }
 
-  /** El token de sesión es de un solo uso: solo sirve para un envío exitoso. */
+  /**
+   * El token de sesión es de un solo uso: solo sirve para un envío exitoso.
+   *
+   * Prende `loading` durante TODA la request (subida + procesamiento del lado del
+   * servidor) y publica el avance de la subida en `progresoSubida`.
+   */
   enviarReporte(
     respuestas: RespuestaEnvio[],
     fotos: File[],
@@ -99,9 +113,28 @@ export class ReporteCiudadanoService {
     formData.append('longitud', String(ubicacion.longitud));
     fotos.forEach((foto) => formData.append('fotos', foto));
 
-    return this.http.post<ApiResponse<EnviarReporteResponseData>>(REPORTES_CIUDADANOS_URL, formData, {
-      headers: new HttpHeaders({ Authorization: `Bearer ${this.sessionTokenSignal()}` })
-    });
+    this.loading.set(true);
+    this.progresoSubida.set(0);
+
+    return this.http
+      .post<ApiResponse<EnviarReporteResponseData>>(REPORTES_CIUDADANOS_URL, formData, {
+        headers: new HttpHeaders({ Authorization: `Bearer ${this.sessionTokenSignal()}` }),
+        reportProgress: true,
+        observe: 'events'
+      })
+      .pipe(
+        tap((evento) => {
+          if (evento.type === HttpEventType.UploadProgress && evento.total) {
+            this.progresoSubida.set(Math.round((evento.loaded / evento.total) * 100));
+          }
+        }),
+        filter((evento) => evento.type === HttpEventType.Response),
+        map((evento) => evento.body as ApiResponse<EnviarReporteResponseData>),
+        finalize(() => {
+          this.loading.set(false);
+          this.progresoSubida.set(null);
+        })
+      );
   }
 
   /** Descarta el preAuthToken y vuelve a pedir el teléfono (p.ej. tras un 401 por token vencido en el 2FA). */

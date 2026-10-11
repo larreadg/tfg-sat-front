@@ -38,7 +38,7 @@
         <p-stepper [(value)]="activeStep" [linear]="true">
           <!-- Paso 1: Validar identidad -->
           <p-step-item [value]="1">
-            <p-step>Validar identidad</p-step>
+            <p-step [disabled]="enviando()">Validar identidad</p-step>
             <p-step-panel>
               <ng-template #content let-activateCallback="activateCallback">
                 <div class="mx-auto" style="max-width: 24rem">
@@ -75,6 +75,11 @@
                             accion="validar-telefono"
                           />
                         </div>
+                        @if (refTurnstileTelefono.requiereInteraccion()) {
+                          <p class="m-0 text-sm text-color-secondary text-center" aria-live="polite">
+                            Tocá la casilla para confirmar que sos una persona. Después te mandamos el código.
+                          </p>
+                        }
                       </div>
 
                       <div class="col-12 pt-2">
@@ -137,7 +142,7 @@
 
           <!-- Paso 2: Completar encuesta -->
           <p-step-item [value]="2">
-            <p-step [disabled]="!identidadVerificada()">Completar encuesta</p-step>
+            <p-step [disabled]="!identidadVerificada() || enviando()">Completar encuesta</p-step>
             <p-step-panel>
               <ng-template #content let-activateCallback="activateCallback">
                 @if (encuestaLoading()) {
@@ -241,59 +246,164 @@
             <p-step-panel>
               <ng-template #content let-activateCallback="activateCallback">
                 @if (reporteEnviado()) {
-                  <div class="flex flex-column align-items-center gap-3 py-5 text-center">
-                    <i class="pi pi-check-circle text-4xl" style="color: var(--p-primary-color)"></i>
-                    <h3 class="m-0">¡Gracias! Tu reporte fue enviado.</h3>
-                    <p class="text-color-secondary m-0" style="max-width: 28rem">
-                      Un analista va a revisar tu reporte. Si detectamos algo importante, te vamos a contactar por
-                      teléfono.
-                    </p>
+                  <div class="flex flex-column align-items-center gap-4 py-5 text-center" role="status">
+                    <span class="exito-icono flex align-items-center justify-content-center border-circle w-4rem h-4rem">
+                      <i class="pi pi-check text-2xl"></i>
+                    </span>
+                    <div class="flex flex-column align-items-center gap-2">
+                      <h3 class="text-xl font-semibold m-0">Recibimos tu reporte</h3>
+                      <p class="text-color-secondary line-height-3 m-0" style="max-width: 28rem">
+                        Un analista lo va a revisar. Si detectamos algo importante, te vamos a contactar por teléfono.
+                      </p>
+                    </div>
+
+                    @if (codigoReporte()) {
+                      <div
+                        class="w-full flex flex-column align-items-center gap-2 p-3 border-1 surface-border border-round-xl"
+                      >
+                        <span class="text-sm text-color-secondary">Número de reporte</span>
+                        <div class="flex align-items-center gap-1">
+                          <span class="codigo-reporte text-2xl font-bold">{{ codigoReporte() }}</span>
+                          <p-button
+                            [icon]="codigoCopiado() ? 'pi pi-check' : 'pi pi-copy'"
+                            [rounded]="true"
+                            [text]="true"
+                            [ariaLabel]="codigoCopiado() ? 'Número copiado' : 'Copiar número de reporte'"
+                            (onClick)="copiarCodigo()"
+                          />
+                        </div>
+                        <span class="text-sm text-color-secondary" aria-live="polite">
+                          {{ codigoCopiado() ? 'Copiado.' : 'Anotalo por si tenés que mencionar tu reporte.' }}
+                        </span>
+                      </div>
+                    }
+
                     <p-button
                       label="Enviar otro reporte"
+                      icon="pi pi-plus"
                       [rounded]="true"
-                      [text]="true"
+                      [outlined]="true"
                       (onClick)="reiniciarFlujo(activateCallback)"
                     />
                   </div>
                 } @else {
                   <div class="grid pt-4">
-                    <div class="col-12">
+                    <div class="col-12 flex flex-column gap-1">
+                      <h3 class="text-lg font-semibold m-0">Revisá tu reporte</h3>
                       <p class="text-color-secondary m-0">
-                        Revisá que todo esté correcto y enviá tu reporte. Un analista lo va a revisar a la brevedad.
+                        Si algo no está bien, volvé atrás y corregilo antes de enviarlo.
                       </p>
                     </div>
 
-                    <div class="col-12 flex flex-column gap-2">
-                      <span class="font-medium">Fotos adjuntas</span>
-                      <span class="text-color-secondary">{{ fotos().length }} foto(s) seleccionada(s)</span>
+                    <!-- Resumen: lo que de verdad se va a mandar, no solo la cantidad de fotos -->
+                    <div class="col-12">
+                      <dl class="flex flex-column m-0">
+                        @for (fila of resumenRespuestas(); track fila.preguntaId) {
+                          <div class="flex flex-column gap-1 py-2 border-bottom-1 surface-border">
+                            <dt class="text-sm text-color-secondary">{{ fila.pregunta }}</dt>
+                            <dd class="font-medium m-0">{{ fila.respuesta }}</dd>
+                          </div>
+                        }
+                        <div class="flex flex-column gap-1 py-2 border-bottom-1 surface-border">
+                          <dt class="text-sm text-color-secondary">Ubicación</dt>
+                          <dd class="font-medium m-0">La de tu teléfono al abrir esta página</dd>
+                        </div>
+                        <div class="flex flex-column gap-2 py-2">
+                          <dt class="text-sm text-color-secondary">
+                            {{ fotos().length === 1 ? 'Foto del agua' : 'Fotos del agua (' + fotos().length + ')' }}
+                          </dt>
+                          <dd class="flex flex-wrap gap-2 m-0">
+                            @for (url of miniaturas(); track url; let indice = $index) {
+                              <img
+                                [src]="url"
+                                [alt]="'Foto ' + (indice + 1) + ' del agua'"
+                                class="miniatura w-5rem h-5rem border-round-lg"
+                              />
+                            }
+                          </dd>
+                        </div>
+                      </dl>
                     </div>
 
-                    <!-- Segundo gate anti-bot: corre al tocar "Enviar reporte" -->
+                    <!--
+                      El progreso aparece donde estaba el botón, sin mover el resumen:
+                      la persona ve la respuesta a su toque justo donde tocó.
+                    -->
+                    @if (enviando()) {
+                      <div class="col-12 flex flex-column gap-3 pt-3" aria-live="polite">
+                        <div class="flex flex-column gap-1">
+                          <span class="font-semibold">Enviando tu reporte</span>
+                          <span class="text-sm text-color-secondary">No cierres esta página hasta que termine.</span>
+                        </div>
+                        <ol class="list-none flex flex-column gap-3 m-0 p-0">
+                          @for (fase of fasesEnvio(); track fase.clave) {
+                            <li
+                              class="flex align-items-start gap-3"
+                              [attr.aria-current]="fase.estado === 'actual' ? 'step' : null"
+                            >
+                              <i [class]="fase.icono + ' text-xl mt-1'" aria-hidden="true"></i>
+                              <div class="flex flex-column gap-2 flex-1 min-w-0">
+                                <div class="flex flex-column gap-1">
+                                  <span
+                                    class="font-medium"
+                                    [class.text-color-secondary]="fase.estado === 'pendiente'"
+                                    >{{ fase.titulo }}</span
+                                  >
+                                  @if (fase.estado === 'actual') {
+                                    <span class="text-sm text-color-secondary">{{ fase.detalle }}</span>
+                                  }
+                                </div>
+                                @if (fase.estado === 'actual' && fase.clave === 'subiendo') {
+                                  <p-progressbar
+                                    [value]="porcentajeSubida()"
+                                    [showValue]="false"
+                                    [style]="{ height: '6px' }"
+                                    ariaLabel="Avance de la subida de fotos"
+                                  />
+                                } @else if (fase.estado === 'actual' && fase.clave === 'registrando') {
+                                  <p-progressbar mode="indeterminate" [style]="{ height: '6px' }" />
+                                }
+                              </div>
+                            </li>
+                          }
+                        </ol>
+                      </div>
+                    } @else {
+                      @if (errorEnvio(); as mensaje) {
+                        <div class="col-12">
+                          <p-message severity="error">{{ mensaje }}</p-message>
+                        </div>
+                      }
+
+                      <div class="col-12 pt-2">
+                        <p-button
+                          [label]="errorEnvio() ? 'Volver a intentar' : 'Enviar reporte'"
+                          [icon]="errorEnvio() ? 'pi pi-refresh' : 'pi pi-send'"
+                          iconPos="right"
+                          [rounded]="true"
+                          [fluid]="true"
+                          (onClick)="enviarReporte(activateCallback)"
+                        />
+                      </div>
+
+                      <div class="col-12 flex justify-content-center">
+                        <p-button
+                          label="Atrás"
+                          icon="pi pi-arrow-left"
+                          [rounded]="true"
+                          [link]="true"
+                          (onClick)="activateCallback(2)"
+                        />
+                      </div>
+                    }
+
+                    <!--
+                      Segundo gate anti-bot. Queda montado SIEMPRE (fuera de los @if): si
+                      sale del DOM, Cloudflare descarta el widget. Es invisible salvo que
+                      pida interacción, y entonces aparece justo debajo de las fases.
+                    -->
                     <div class="col-12 flex justify-content-center">
                       <app-turnstile #refTurnstileEnvio [(token)]="turnstileEnvio" accion="enviar-reporte" />
-                    </div>
-
-                    <div class="col-12 pt-2">
-                      <p-button
-                        label="Enviar reporte"
-                        icon="pi pi-send"
-                        iconPos="right"
-                        [rounded]="true"
-                        [fluid]="true"
-                        [loading]="loading() || verificando()"
-                        (onClick)="enviarReporte(activateCallback)"
-                      />
-                    </div>
-
-                    <div class="col-12 flex justify-content-center">
-                      <p-button
-                        label="Atrás"
-                        icon="pi pi-arrow-left"
-                        [rounded]="true"
-                        [link]="true"
-                        [disabled]="loading()"
-                        (onClick)="activateCallback(2)"
-                      />
                     </div>
                   </div>
                 }

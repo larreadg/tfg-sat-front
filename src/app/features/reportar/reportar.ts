@@ -1,6 +1,5 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
@@ -9,6 +8,7 @@ import { CheckboxModule } from 'primeng/checkbox';
 import { InputTextModule } from 'primeng/inputtext';
 import { InputOtpModule } from 'primeng/inputotp';
 import { MessageModule } from 'primeng/message';
+import { ProgressBarModule } from 'primeng/progressbar';
 import { RadioButtonModule } from 'primeng/radiobutton';
 import { StepperModule } from 'primeng/stepper';
 import { FotoSelector } from './foto-selector/foto-selector';
@@ -23,6 +23,37 @@ const TELEFONO_PATTERN = /^09\d{8}$/;
 const CODIGO_PAIS = '595';
 
 type UbicacionEstado = 'solicitando' | 'concedida' | 'error';
+
+/**
+ * Tramos del envío del reporte, en orden. El spinner del botón solo no alcanza:
+ * el envío encadena el desafío de Cloudflare, la subida de las fotos (lenta con
+ * datos móviles) y el registro del lado del servidor, y cada tramo puede tardar
+ * segundos. Mostrarlos evita que la persona crea que se colgó y vuelva a tocar.
+ */
+type FaseEnvio = 'verificando' | 'subiendo' | 'registrando';
+
+const ORDEN_FASES: FaseEnvio[] = ['verificando', 'subiendo', 'registrando'];
+
+interface FilaFase {
+  clave: FaseEnvio;
+  titulo: string;
+  detalle: string;
+  estado: 'hecha' | 'actual' | 'pendiente';
+  /** Clases de PrimeIcons + color según el estado. */
+  icono: string;
+}
+
+const ICONO_FASE: Record<FilaFase['estado'], string> = {
+  hecha: 'pi pi-check-circle text-primary',
+  actual: 'pi pi-spin pi-spinner text-primary',
+  pendiente: 'pi pi-circle text-color-secondary'
+};
+
+interface FilaResumen {
+  preguntaId: number;
+  pregunta: string;
+  respuesta: string;
+}
 
 interface Ubicacion {
   latitud: number;
@@ -41,6 +72,7 @@ interface Ubicacion {
     InputTextModule,
     InputOtpModule,
     MessageModule,
+    ProgressBarModule,
     RadioButtonModule,
     StepperModule,
     Turnstile
@@ -55,7 +87,6 @@ export class Reportar {
   private readonly fb = inject(FormBuilder);
   private readonly reporteCiudadanoService = inject(ReporteCiudadanoService);
   private readonly messageService = inject(MessageService);
-  private readonly sanitizer = inject(DomSanitizer);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly ubicacionEstado = signal<UbicacionEstado>('solicitando');
@@ -66,12 +97,15 @@ export class Reportar {
   readonly identidadStage = this.reporteCiudadanoService.stage;
   readonly identidadVerificada = this.reporteCiudadanoService.identidadVerificada;
   readonly loading = this.reporteCiudadanoService.loading;
+  private readonly progresoSubida = this.reporteCiudadanoService.progresoSubida;
 
   /** Tokens anti-bot: uno para validar el teléfono y otro para enviar el reporte. */
   readonly turnstileTelefono = signal<string | null>(null);
   readonly turnstileEnvio = signal<string | null>(null);
   /** `true` mientras corre el desafío de Cloudflare (antes de llamar a la API). */
   readonly verificando = signal(false);
+  /** Igual que `verificando`, pero solo el del envío: es la primera fase del paso 3. */
+  private readonly verificandoEnvio = signal(false);
   private readonly turnstileTelefonoRef = viewChild<Turnstile>('refTurnstileTelefono');
   private readonly turnstileEnvioRef = viewChild<Turnstile>('refTurnstileEnvio');
   readonly resendCooldown = signal(0);
@@ -90,12 +124,89 @@ export class Reportar {
   readonly fotosMax = computed(() => this.encuesta()?.fotosMax ?? 3);
   /** `true` cuando todavía faltan fotos para poder enviar. */
   readonly faltanFotos = computed(() => this.fotos().length < this.fotosMin());
-  readonly reporteEnviado = signal(false);
+  /** Código público que devolvió el envío (ej. AGD-0000012); `null` hasta enviar. */
+  readonly codigoReporte = signal<string | null>(null);
+  readonly reporteEnviado = computed(() => this.codigoReporte() !== null);
+  readonly codigoCopiado = signal(false);
+  /** Error del último intento de envío, en línea junto al botón (un toast se pierde en el celular). */
+  readonly errorEnvio = signal<string | null>(null);
+
+  /** Fase en curso del envío, o `null` si no se está enviando. */
+  readonly faseEnvio = computed<FaseEnvio | null>(() => {
+    if (this.verificandoEnvio()) {
+      return 'verificando';
+    }
+    const progreso = this.progresoSubida();
+    if (!this.loading() || progreso === null) {
+      return null;
+    }
+    return progreso < 100 ? 'subiendo' : 'registrando';
+  });
+  readonly enviando = computed(() => this.faseEnvio() !== null);
+  readonly porcentajeSubida = computed(() => this.progresoSubida() ?? 0);
+
+  readonly fasesEnvio = computed<FilaFase[]>(() => {
+    const actual = this.faseEnvio();
+    const indiceActual = actual ? ORDEN_FASES.indexOf(actual) : -1;
+    const cantidadFotos = this.fotos().length;
+    const interaccion = this.turnstileEnvioRef()?.requiereInteraccion() ?? false;
+
+    const titulos: Record<FaseEnvio, string> = {
+      verificando: 'Verificación de seguridad',
+      subiendo: cantidadFotos === 1 ? 'Subida de la foto' : `Subida de las ${cantidadFotos} fotos`,
+      registrando: 'Registro del reporte'
+    };
+    const detalles: Record<FaseEnvio, string> = {
+      verificando: interaccion
+        ? 'Tocá la casilla de abajo para confirmar que sos una persona.'
+        : 'Comprobamos que el reporte lo envía una persona.',
+      subiendo:
+        actual === 'subiendo'
+          ? `${this.porcentajeSubida()} % subido. Con poca señal puede tardar un poco.`
+          : 'Se suben junto con tus respuestas.',
+      registrando: 'Guardamos tu reporte y lo ubicamos en el mapa.'
+    };
+
+    return ORDEN_FASES.map((clave, indice) => {
+      const estado: FilaFase['estado'] =
+        indice < indiceActual ? 'hecha' : indice === indiceActual ? 'actual' : 'pendiente';
+      return { clave, titulo: titulos[clave], detalle: detalles[clave], estado, icono: ICONO_FASE[estado] };
+    });
+  });
+
+  /** Lo que el ciudadano respondió, en texto, para revisarlo antes de enviar. */
+  readonly resumenRespuestas = computed<FilaResumen[]>(() => {
+    const datosEncuesta = this.encuesta();
+    if (!datosEncuesta) {
+      return [];
+    }
+    const unicas = this.respuestaUnicaSignal();
+    const multiples = this.respuestasMultipleSignal();
+
+    return datosEncuesta.preguntas
+      .filter((pregunta) => pregunta.tipo !== 'FOTO')
+      .map((pregunta) => {
+        const elegidas =
+          pregunta.tipo === 'ELECCION_UNICA' ? [unicas[pregunta.id]] : (multiples[pregunta.id] ?? []);
+        const textos = pregunta.opciones
+          .filter((opcion) => elegidas.includes(opcion.id))
+          .map((opcion) => opcion.texto);
+        return {
+          preguntaId: pregunta.id,
+          pregunta: pregunta.texto,
+          respuesta: textos.length > 0 ? textos.join(', ') : 'Sin responder'
+        };
+      });
+  });
+
+  /** Previsualizaciones de las fotos para el resumen. Se liberan en el `effect` del constructor. */
+  readonly miniaturas = computed(() => this.fotos().map((foto) => URL.createObjectURL(foto)));
 
   private readonly respuestaUnicaSignal = signal<Record<number, number | null>>({});
   private readonly respuestasMultipleSignal = signal<Record<number, number[]>>({});
 
   private resendIntervalId?: ReturnType<typeof setInterval>;
+  private copiadoTimeoutId?: ReturnType<typeof setTimeout>;
 
   readonly telefonoForm = this.fb.nonNullable.group({
     telefono: ['', [Validators.required, Validators.pattern(TELEFONO_PATTERN)]],
@@ -108,7 +219,26 @@ export class Reportar {
   constructor() {
     this.solicitarUbicacion();
     this.loadEncuesta();
-    this.destroyRef.onDestroy(() => this.stopResendCountdown());
+    this.destroyRef.onDestroy(() => {
+      this.stopResendCountdown();
+      clearTimeout(this.copiadoTimeoutId);
+    });
+
+    // Cada cambio de fotos crea Object URL nuevas: las anteriores se liberan acá
+    // para no retener los archivos en memoria.
+    effect((onCleanup) => {
+      const urls = this.miniaturas();
+      onCleanup(() => urls.forEach((url) => URL.revokeObjectURL(url)));
+    });
+  }
+
+  // Cerrar o recargar la pestaña a mitad del envío deja a la persona sin saber si
+  // el reporte llegó. Con esto el navegador pide confirmación.
+  @HostListener('window:beforeunload', ['$event'])
+  avisarSiEnviando(event: BeforeUnloadEvent): void {
+    if (this.enviando()) {
+      event.preventDefault();
+    }
   }
 
   // Sin esto, soltar un archivo arrastrado en cualquier parte de la página (fuera de los
@@ -320,10 +450,11 @@ export class Reportar {
   async enviarReporte(activateCallback: (value: number) => void): Promise<void> {
     const datosEncuesta = this.encuesta();
     const ubicacion = this.ubicacion();
-    if (!datosEncuesta || !ubicacion) {
+    if (!datosEncuesta || !ubicacion || this.enviando()) {
       return;
     }
 
+    this.errorEnvio.set(null);
 
     const respuestas: RespuestaEnvio[] = datosEncuesta.preguntas
       .filter((pregunta) => pregunta.tipo !== 'FOTO')
@@ -336,13 +467,16 @@ export class Reportar {
       }));
 
     // Segundo gate anti-bot: el envío también se verifica, no solo el teléfono.
-    const tokenAntiBot = await this.resolverAntiBot(this.turnstileEnvioRef());
+    // Su error va en línea, junto al botón, igual que los de la API.
+    const tokenAntiBot = await this.resolverAntiBot(this.turnstileEnvioRef(), this.verificandoEnvio, (mensaje) =>
+      this.errorEnvio.set(mensaje)
+    );
     if (!tokenAntiBot) {
       return;
     }
 
     this.reporteCiudadanoService.enviarReporte(respuestas, this.fotos(), ubicacion, tokenAntiBot).subscribe({
-      next: () => this.reporteEnviado.set(true),
+      next: (res) => this.codigoReporte.set(res.data?.codigoPublico ?? ''),
       error: (error: HttpErrorResponse) => {
         if (error.status === 409) {
           this.messageService.add({
@@ -353,33 +487,65 @@ export class Reportar {
           this.reiniciarFlujo(activateCallback);
           return;
         }
-        this.showApiError(error, 'No se pudo enviar el reporte.');
+        this.errorEnvio.set(this.mensajeErrorEnvio(error));
         // El token ya se canjeo contra Cloudflare: hay que pedir uno nuevo.
         this.turnstileEnvioRef()?.reset();
       }
     });
   }
 
+  async copiarCodigo(): Promise<void> {
+    const codigo = this.codigoReporte();
+    if (!codigo) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(codigo);
+    } catch {
+      // Sin permiso de portapapeles: el código sigue a la vista y se puede
+      // seleccionar a mano, así que alcanza con no marcarlo como copiado.
+      return;
+    }
+    this.codigoCopiado.set(true);
+    clearTimeout(this.copiadoTimeoutId);
+    this.copiadoTimeoutId = setTimeout(() => this.codigoCopiado.set(false), 2500);
+  }
+
+  /** Sin respuesta del servidor (status 0) el problema es la conexión, no el reporte. */
+  private mensajeErrorEnvio(error: HttpErrorResponse): string {
+    if (error.status === 0) {
+      return 'No pudimos conectarnos. Revisá tu conexión y volvé a intentar: tus respuestas y fotos siguen acá.';
+    }
+    const apiError = error.error as ApiResponse<null> | undefined;
+    return apiError?.message ?? 'No se pudo enviar el reporte. Volvé a intentar.';
+  }
+
   /**
    * Lanza el desafío de Cloudflare y devuelve el token, o `null` si falló (en
-   * cuyo caso ya se avisó al usuario). El widget aparece recién en este momento.
+   * cuyo caso ya se avisó: por toast, o por `alFallar` si se pasa). El widget
+   * aparece recién en este momento. `enCurso` queda en `true` mientras tanto.
    */
-  private async resolverAntiBot(widget: Turnstile | undefined): Promise<string | null> {
+  private async resolverAntiBot(
+    widget: Turnstile | undefined,
+    enCurso = this.verificando,
+    alFallar?: (mensaje: string) => void
+  ): Promise<string | null> {
     if (!widget) {
       return null;
     }
-    this.verificando.set(true);
+    enCurso.set(true);
     try {
       return await widget.obtenerToken();
     } catch (error) {
-      this.messageService.add({
-        severity: 'error',
-        summary: 'Verificación de seguridad',
-        detail: (error as Error).message
-      });
+      const mensaje = (error as Error).message;
+      if (alFallar) {
+        alFallar(mensaje);
+      } else {
+        this.messageService.add({ severity: 'error', summary: 'Verificación de seguridad', detail: mensaje });
+      }
       return null;
     } finally {
-      this.verificando.set(false);
+      enCurso.set(false);
     }
   }
 
@@ -391,7 +557,9 @@ export class Reportar {
     this.intentoAvanzarEncuesta.set(false);
     this.turnstileTelefono.set(null);
     this.turnstileEnvio.set(null);
-    this.reporteEnviado.set(false);
+    this.codigoReporte.set(null);
+    this.codigoCopiado.set(false);
+    this.errorEnvio.set(null);
     this.telefonoForm.reset();
     this.codigoForm.reset();
     activateCallback(1);
